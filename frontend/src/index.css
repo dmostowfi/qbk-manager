@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* React Big Calendar overrides */
+.rbc-calendar {
+  min-height: 600px;
+}
+
+.rbc-event {
+  border-radius: 4px;
+}
+
+.rbc-today {
+  background-color: #e3f2fd;
+}

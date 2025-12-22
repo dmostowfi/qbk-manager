@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id               String           @id @default(uuid())
+  firstName        String
+  lastName         String
+  email            String           @unique
+  phone            String?
+  streetAddress    String?
+  city             String?
+  state            String?
+  zipCode          String?
+  dateOfBirth      DateTime?
+  membershipType   MembershipType   @default(NONE)
+  membershipStatus MembershipStatus @default(ACTIVE)
+  statusUpdatedAt  DateTime         @default(now())
+  classCredits     Int              @default(0)
+  dropInCredits    Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  enrollments      Enrollment[]
+  transactions     Transaction[]
+}
+
+model Event {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  eventType   EventType
+  courtId     Int
+  startTime   DateTime
+  endTime     DateTime
+  maxCapacity Int            @default(12)
+  instructor  String?
+  level       SkillLevel
+  gender      GenderCategory
+  isYouth     Boolean        @default(false)
+  isRecurring Boolean        @default(false)
+  status      EventStatus    @default(SCHEDULED)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  enrollments Enrollment[]
+}
+
+model Enrollment {
+  id        String           @id @default(uuid())
+  playerId  String
+  eventId   String
+  status    EnrollmentStatus @default(REGISTERED)
+  createdAt DateTime         @default(now())
+  player    Player           @relation(fields: [playerId], references: [id])
+  event     Event            @relation(fields: [eventId], references: [id])
+
+  @@unique([playerId, eventId])
+}
+
+model Transaction {
+  id              String          @id @default(uuid())
+  playerId        String
+  transactionType TransactionType
+  amount          Decimal         @db.Decimal(10, 2)
+  classCredits    Int             @default(0)
+  dropInCredits   Int             @default(0)
+  createdAt       DateTime        @default(now())
+  player          Player          @relation(fields: [playerId], references: [id])
+}
+
+enum MembershipType {
+  GOLD
+  DROP_IN
+  NONE
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum TransactionType {
+  MEMBERSHIP_GOLD
+  MEMBERSHIP_DROPIN
+  CLASS_PACK
+  SINGLE_CLASS
+  SINGLE_DROP_IN
+}
+
+enum EnrollmentStatus {
+  REGISTERED
+  WAITLISTED
+  CANCELLED
+  ATTENDED
+  NO_SHOW
+}
+
+enum EventType {
+  CLASS
+  OPEN_PLAY
+  PRIVATE_LESSON
+  LEAGUE
+  OTHER
+}
+
+enum SkillLevel {
+  INTRO_I
+  INTRO_II
+  INTRO_III
+  INTRO_IV
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum GenderCategory {
+  MENS
+  WOMENS
+  COED
+}
+
+enum EventStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
