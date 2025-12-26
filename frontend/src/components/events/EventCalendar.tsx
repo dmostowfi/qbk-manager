@@ -26,12 +26,19 @@ interface EventCalendarProps {
 const eventTypeColors: Record<string, string> = {
   CLASS: '#1976d2',
   OPEN_PLAY: '#2e7d32',
-  PRIVATE_LESSON: '#9c27b0',
+  PRIVATE_EVENT: '#9c27b0',
+  TOURNAMENT: '#d32f2f',
   LEAGUE: '#ed6c02',
   OTHER: '#0288d1',
 };
 
 export default function EventCalendar({ events, loading, error, onSelectEvent }: EventCalendarProps) {
+  const minTime = new Date();
+  minTime.setHours(6, 0, 0, 0);
+
+  const maxTime = new Date();
+  maxTime.setHours(23, 0, 0, 0);
+
   const calendarEvents = useMemo(() => {
     return events.map((event) => ({
       id: event.id,
@@ -85,6 +92,8 @@ export default function EventCalendar({ events, loading, error, onSelectEvent }:
         popup
         step={30}
         timeslots={2}
+        min={minTime}
+        max={maxTime}
       />
     </Box>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -14,12 +14,16 @@ import {
   Switch,
   Grid,
   Box,
+  Divider,
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
-import { Event, EventFormData, EventType, SkillLevel, GenderCategory } from '../../types';
+import { Event, EventFormData, EventType, SkillLevel, GenderCategory, Enrollment } from '../../types';
+import { eventsApi } from '../../services/api';
+import EnrollmentSection from './EnrollmentSection';
+import { isEventEditable } from '../../utils/eventUtils';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -34,7 +38,8 @@ interface EventFormProps {
 const eventTypes: { value: EventType; label: string }[] = [
   { value: 'CLASS', label: 'Class' },
   { value: 'OPEN_PLAY', label: 'Open Play' },
-  { value: 'PRIVATE_LESSON', label: 'Private Lesson' },
+  { value: 'PRIVATE_EVENT', label: 'Private Event' },
+  { value: 'TOURNAMENT', label: 'Tournament' },
   { value: 'LEAGUE', label: 'League' },
   { value: 'OTHER', label: 'Other' },
 ];
@@ -89,6 +94,20 @@ const defaultFormData: FormData = {
 export default function EventForm({ open, onClose, onSubmit, event }: EventFormProps) {
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   const [submitting, setSubmitting] = useState(false);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [currentEnrollment, setCurrentEnrollment] = useState(0);
+
+  const fetchEventDetails = useCallback(async () => {
+    if (event?.id) {
+      try {
+        const fullEvent = await eventsApi.getById(event.id);
+        setEnrollments(fullEvent.enrollments || []);
+        setCurrentEnrollment(fullEvent.currentEnrollment);
+      } catch (error) {
+        console.error('Failed to fetch event details:', error);
+      }
+    }
+  }, [event?.id]);
 
   useEffect(() => {
     if (event) {
@@ -106,10 +125,15 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
         isYouth: event.isYouth,
         isRecurring: event.isRecurring,
       });
+      fetchEventDetails();
     } else {
       setFormData(defaultFormData);
+      setEnrollments([]);
+      setCurrentEnrollment(0);
     }
-  }, [event, open]);
+  }, [event, open, fetchEventDetails]);
+
+  const editable = event ? isEventEditable(event.startTime) : true;
 
   const handleChange = (field: keyof FormData, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -132,9 +156,11 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
     }
   };
 
+  const dialogTitle = !event ? 'Create Event' : editable ? 'Edit Event' : 'View Event';
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{event ? 'Edit Event' : 'Create Event'}</DialogTitle>
+      <DialogTitle>{dialogTitle}</DialogTitle>
       <DialogContent>
         <Box className="pt-2">
           <Grid container spacing={2}>
@@ -143,6 +169,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
                 label="Title"
                 fullWidth
                 required
+                disabled={!editable}
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
               />
@@ -154,13 +181,14 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
                 fullWidth
                 multiline
                 rows={2}
+                disabled={!editable}
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
               />
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
+              <FormControl fullWidth disabled={!editable}>
                 <InputLabel>Event Type</InputLabel>
                 <Select
                   value={formData.eventType}
@@ -177,7 +205,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
+              <FormControl fullWidth disabled={!editable}>
                 <InputLabel>Court</InputLabel>
                 <Select
                   value={formData.courtId}
@@ -198,6 +226,8 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
                 label="Start Time"
                 value={formData.startTime}
                 onChange={(value) => value && handleChange('startTime', value)}
+                timeSteps={{ minutes: 30 }}
+                disabled={!editable}
                 slotProps={{ textField: { fullWidth: true } }}
               />
             </Grid>
@@ -207,12 +237,14 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
                 label="End Time"
                 value={formData.endTime}
                 onChange={(value) => value && handleChange('endTime', value)}
+                timeSteps={{ minutes: 30 }}
+                disabled={!editable}
                 slotProps={{ textField: { fullWidth: true } }}
               />
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
+              <FormControl fullWidth disabled={!editable}>
                 <InputLabel>Skill Level</InputLabel>
                 <Select
                   value={formData.level}
@@ -229,7 +261,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
             </Grid>
 
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
+              <FormControl fullWidth disabled={!editable}>
                 <InputLabel>Gender</InputLabel>
                 <Select
                   value={formData.gender}
@@ -250,6 +282,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
                 label="Max Capacity"
                 type="number"
                 fullWidth
+                disabled={!editable}
                 value={formData.maxCapacity}
                 onChange={(e) => handleChange('maxCapacity', parseInt(e.target.value) || 0)}
                 inputProps={{ min: 1 }}
@@ -260,6 +293,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
               <TextField
                 label="Instructor"
                 fullWidth
+                disabled={!editable}
                 value={formData.instructor}
                 onChange={(e) => handleChange('instructor', e.target.value)}
               />
@@ -267,6 +301,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
 
             <Grid item xs={6}>
               <FormControlLabel
+                disabled={!editable}
                 control={
                   <Switch
                     checked={formData.isYouth}
@@ -279,6 +314,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
 
             <Grid item xs={6}>
               <FormControlLabel
+                disabled={!editable}
                 control={
                   <Switch
                     checked={formData.isRecurring}
@@ -289,17 +325,33 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
               />
             </Grid>
           </Grid>
+
+          {event && (
+            <>
+              <Divider className="my-4" />
+              <EnrollmentSection
+                eventId={event.id}
+                enrollments={enrollments}
+                currentEnrollment={currentEnrollment}
+                maxCapacity={formData.maxCapacity}
+                isEditable={editable}
+                onEnrollmentChange={fetchEventDetails}
+              />
+            </>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={submitting || !formData.title}
-        >
-          {submitting ? 'Saving...' : event ? 'Update' : 'Create'}
-        </Button>
+        <Button onClick={onClose}>{editable ? 'Cancel' : 'Close'}</Button>
+        {editable && (
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            disabled={submitting || !formData.title}
+          >
+            {submitting ? 'Saving...' : event ? 'Update' : 'Create'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

@@ -1,5 +1,5 @@
 // Event types
-export type EventType = 'CLASS' | 'OPEN_PLAY' | 'PRIVATE_LESSON' | 'LEAGUE' | 'OTHER';
+export type EventType = 'CLASS' | 'OPEN_PLAY' | 'PRIVATE_EVENT' | 'TOURNAMENT' | 'LEAGUE' | 'OTHER';
 export type SkillLevel = 'INTRO_I' | 'INTRO_II' | 'INTRO_III' | 'INTRO_IV' | 'INTERMEDIATE' | 'ADVANCED';
 export type GenderCategory = 'MENS' | 'WOMENS' | 'COED';
 export type EventStatus = 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
@@ -18,6 +18,7 @@ export interface Event {
   startTime: string;
   endTime: string;
   maxCapacity: number;
+  currentEnrollment: number;
   instructor?: string;
   level: SkillLevel;
   gender: GenderCategory;

@@ -1,4 +1,4 @@
-import { Box, Grid, Typography, CircularProgress, Alert } from '@mui/material';
+import { Box, Typography, CircularProgress, Alert } from '@mui/material';
 import EventCard from './EventCard';
 import { Event } from '../../types';
 
@@ -8,9 +8,10 @@ interface EventListProps {
   error: string | null;
   onEdit: (event: Event) => void;
   onDelete: (event: Event) => void;
+  onView: (event: Event) => void;
 }
 
-export default function EventList({ events, loading, error, onEdit, onDelete }: EventListProps) {
+export default function EventList({ events, loading, error, onEdit, onDelete, onView }: EventListProps) {
   if (loading) {
     return (
       <Box className="flex justify-center items-center py-12">
@@ -41,12 +42,10 @@ export default function EventList({ events, loading, error, onEdit, onDelete }: 
   }
 
   return (
-    <Grid container spacing={3}>
+    <Box className="flex flex-col gap-2">
       {events.map((event) => (
-        <Grid item xs={12} sm={6} md={4} key={event.id}>
-          <EventCard event={event} onEdit={onEdit} onDelete={onDelete} />
-        </Grid>
+        <EventCard key={event.id} event={event} onEdit={onEdit} onDelete={onDelete} onView={onView} />
       ))}
-    </Grid>
+    </Box>
   );
 }
