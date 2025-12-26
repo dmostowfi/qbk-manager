@@ -30,15 +30,16 @@ model Player {
 }
 
 model Event {
-  id          String         @id @default(uuid())
-  title       String
-  description String?
-  eventType   EventType
-  courtId     Int
-  startTime   DateTime
-  endTime     DateTime
-  maxCapacity Int            @default(12)
-  instructor  String?
+  id                String         @id @default(uuid())
+  title             String
+  description       String?
+  eventType         EventType
+  courtId           Int
+  startTime         DateTime
+  endTime           DateTime
+  maxCapacity       Int            @default(12)
+  currentEnrollment Int            @default(0)
+  instructor        String?
   level       SkillLevel
   gender      GenderCategory
   isYouth     Boolean        @default(false)
@@ -103,7 +104,8 @@ enum EnrollmentStatus {
 enum EventType {
   CLASS
   OPEN_PLAY
-  PRIVATE_LESSON
+  PRIVATE_EVENT
+  TOURNAMENT
   LEAGUE
   OTHER
 }
