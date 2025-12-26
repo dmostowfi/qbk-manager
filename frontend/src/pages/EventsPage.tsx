@@ -78,7 +78,7 @@ export default function EventsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
 
-  const { events, loading, error, createEvent, updateEvent, deleteEvent } = useEvents();
+  const { events, loading, error, createEvent, updateEvent, deleteEvent, refetch } = useEvents();
 
   const filteredEvents = useMemo(() => {
     const now = new Date();
@@ -105,6 +105,7 @@ export default function EventsPage() {
   const handleCloseForm = () => {
     setFormOpen(false);
     setSelectedEvent(null);
+    refetch(); // Refresh events list to get updated enrollment counts
   };
 
   const handleSubmit = async (data: EventFormData) => {
