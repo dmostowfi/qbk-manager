@@ -9,6 +9,7 @@ datasource db {
 
 model Player {
   id               String           @id @default(uuid())
+  clerkId          String?          @unique
   firstName        String
   lastName         String
   email            String           @unique
@@ -71,6 +72,22 @@ model Transaction {
   dropInCredits   Int             @default(0)
   createdAt       DateTime        @default(now())
   player          Player          @relation(fields: [playerId], references: [id])
+}
+
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique
+  email     String   @unique
+  firstName String
+  lastName  String
+  role      UserRole @default(STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
 }
 
 enum MembershipType {

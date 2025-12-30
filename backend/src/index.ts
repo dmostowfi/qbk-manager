@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { clerkMiddleware } from '@clerk/express';
 import routes from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -15,6 +16,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use(clerkMiddleware());
 
 // Routes
 app.use('/api', routes);
