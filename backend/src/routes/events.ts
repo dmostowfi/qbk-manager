@@ -10,12 +10,12 @@ router.get('/', eventsController.getAll);
 router.get('/:id', eventsController.getById);
 
 // Admin/Staff only
-router.post('/', requireRole('ADMIN', 'STAFF'), eventsController.create);
-router.put('/:id', requireRole('ADMIN', 'STAFF'), eventsController.update);
-router.delete('/:id', requireRole('ADMIN', 'STAFF'), eventsController.delete);
+router.post('/', requireRole('admin', 'staff'), eventsController.create);
+router.put('/:id', requireRole('admin', 'staff'), eventsController.update);
+router.delete('/:id', requireRole('admin', 'staff'), eventsController.delete);
 
 // Enrollment routes - Admin/Staff only
-router.post('/:id/enroll', requireRole('ADMIN', 'STAFF'), enrollmentController.enroll);
-router.delete('/:id/enroll/:enrollmentId', requireRole('ADMIN', 'STAFF'), enrollmentController.unenroll);
+router.post('/:id/enroll', requireRole('admin', 'staff'), enrollmentController.enroll);
+router.delete('/:id/enroll/:enrollmentId', requireRole('admin', 'staff'), enrollmentController.unenroll);
 
 export default router;
