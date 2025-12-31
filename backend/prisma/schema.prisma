@@ -74,22 +74,6 @@ model Transaction {
   player          Player          @relation(fields: [playerId], references: [id])
 }
 
-model User {
-  id        String   @id @default(uuid())
-  clerkId   String   @unique
-  email     String   @unique
-  firstName String
-  lastName  String
-  role      UserRole @default(STAFF)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-enum UserRole {
-  ADMIN
-  STAFF
-}
-
 enum MembershipType {
   GOLD
   DROP_IN
