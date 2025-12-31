@@ -18,6 +18,7 @@ import {
   Event as EventIcon,
   People as PeopleIcon,
 } from '@mui/icons-material';
+import { UserButton } from '@clerk/clerk-react';
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -82,9 +83,10 @@ export default function Layout({ children }: LayoutProps) {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             QBK Indoor Beach Volleyball
           </Typography>
+          <UserButton afterSignOutUrl="/sign-in" />
         </Toolbar>
       </AppBar>
 
