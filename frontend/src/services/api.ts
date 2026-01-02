@@ -95,18 +95,9 @@ export const playersApi = {
     return response.data.data!;
   },
 
-  create: async (data: PlayerFormData): Promise<Player> => {
-    const response = await api.post<ApiResponse<Player>>('/players', data);
-    return response.data.data!;
-  },
-
   update: async (id: string, data: Partial<PlayerFormData>): Promise<Player> => {
     const response = await api.put<ApiResponse<Player>>(`/players/${id}`, data);
     return response.data.data!;
-  },
-
-  delete: async (id: string): Promise<void> => {
-    await api.delete(`/players/${id}`);
   },
 };
 
