@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 
 const router = Router();
 const prisma = new PrismaClient();
-const QBK_ORG_ID = process.env.CLERK_ORG_ID;
+const EMPLOYEE_EMAIL_DOMAIN = process.env.EMPLOYEE_EMAIL_DOMAIN;
 
 interface ClerkUserEvent {
   data: {
@@ -12,10 +12,6 @@ interface ClerkUserEvent {
     email_addresses: { email_address: string }[];
     first_name: string | null;
     last_name: string | null;
-    organization_memberships?: {
-      organization: { id: string; name: string };
-      role: string;
-    }[];
   };
   type: string;
 }
@@ -56,7 +52,7 @@ router.post('/clerk', async (req: Request, res: Response) => {
   const eventType = evt.type;
 
   if (eventType === 'user.created') {
-    const { id, email_addresses, first_name, last_name, organization_memberships } = evt.data;
+    const { id, email_addresses, first_name, last_name } = evt.data;
     const email = email_addresses[0]?.email_address;
 
     if (!email) {
@@ -64,12 +60,9 @@ router.post('/clerk', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No email provided' });
     }
 
-    // Skip Player creation for employees (members of QBK Staff organization)
-    const isQbkEmployee = organization_memberships?.some(
-      m => m.organization.id === QBK_ORG_ID
-    );
-    if (isQbkEmployee) {
-      console.log(`Skipping Player creation for QBK employee ${email}`);
+    // Skip Player creation for employees (identified by email domain)
+    if (EMPLOYEE_EMAIL_DOMAIN && email.endsWith(EMPLOYEE_EMAIL_DOMAIN)) {
+      console.log(`Skipping Player creation for employee ${email}`);
       return res.status(200).json({ success: true, message: 'Employee account, no Player created' });
     }
 
