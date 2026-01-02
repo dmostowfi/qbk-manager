@@ -16,15 +16,9 @@ import {
   CircularProgress,
   Alert,
   TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
 } from '@mui/material';
 import {
-  Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { usePlayers } from '../hooks/usePlayers';
@@ -54,10 +48,8 @@ export default function PlayersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [playerToDelete, setPlayerToDelete] = useState<Player | null>(null);
 
-  const { players, loading, error, createPlayer, updatePlayer, deletePlayer, setFilters } = usePlayers();
+  const { players, loading, error, updatePlayer, setFilters } = usePlayers();
 
   const handleSearch = () => {
     setFilters({ search: searchQuery });
@@ -76,21 +68,6 @@ export default function PlayersPage() {
   const handleSubmit = async (data: PlayerFormData) => {
     if (selectedPlayer) {
       await updatePlayer(selectedPlayer.id, data);
-    } else {
-      await createPlayer(data);
-    }
-  };
-
-  const handleDeleteClick = (player: Player) => {
-    setPlayerToDelete(player);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (playerToDelete) {
-      await deletePlayer(playerToDelete.id);
-      setDeleteDialogOpen(false);
-      setPlayerToDelete(null);
     }
   };
 
@@ -120,13 +97,6 @@ export default function PlayersPage() {
         <Typography variant="h4" component="h1">
           Players
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenForm()}
-        >
-          Add Player
-        </Button>
       </Box>
 
       <Box className="mb-4 flex gap-2">
@@ -153,7 +123,7 @@ export default function PlayersPage() {
             No players found
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Add your first player to get started
+            Players will appear here when they sign up
           </Typography>
         </Box>
       ) : (
@@ -213,15 +183,6 @@ export default function PlayersPage() {
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteClick(player)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
                   </TableCell>
                 </TableRow>
               ))}
@@ -236,20 +197,6 @@ export default function PlayersPage() {
         onSubmit={handleSubmit}
         player={selectedPlayer}
       />
-
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Delete Player</DialogTitle>
-        <DialogContent>
-          Are you sure you want to delete {playerToDelete?.firstName} {playerToDelete?.lastName}?
-          This action cannot be undone.
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

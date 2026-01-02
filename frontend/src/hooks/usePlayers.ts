@@ -25,21 +25,10 @@ export function usePlayers(initialFilters?: PlayerFilters) {
     fetchPlayers();
   }, [fetchPlayers]);
 
-  const createPlayer = async (data: PlayerFormData) => {
-    const newPlayer = await playersApi.create(data);
-    setPlayers((prev) => [...prev, newPlayer]);
-    return newPlayer;
-  };
-
   const updatePlayer = async (id: string, data: Partial<PlayerFormData>) => {
     const updated = await playersApi.update(id, data);
     setPlayers((prev) => prev.map((p) => (p.id === id ? updated : p)));
     return updated;
-  };
-
-  const deletePlayer = async (id: string) => {
-    await playersApi.delete(id);
-    setPlayers((prev) => prev.filter((p) => p.id !== id));
   };
 
   return {
@@ -49,8 +38,6 @@ export function usePlayers(initialFilters?: PlayerFilters) {
     filters,
     setFilters,
     refetch: fetchPlayers,
-    createPlayer,
     updatePlayer,
-    deletePlayer,
   };
 }

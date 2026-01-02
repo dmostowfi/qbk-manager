@@ -108,7 +108,7 @@ export default function PlayerForm({ open, onClose, onSubmit, player }: PlayerFo
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{player ? 'Edit Player' : 'Add Player'}</DialogTitle>
+      <DialogTitle>Edit Player</DialogTitle>
       <DialogContent>
         <Box className="pt-2">
           <Grid container spacing={2}>
@@ -117,6 +117,7 @@ export default function PlayerForm({ open, onClose, onSubmit, player }: PlayerFo
                 label="First Name"
                 fullWidth
                 required
+                disabled
                 value={formData.firstName}
                 onChange={(e) => handleChange('firstName', e.target.value)}
               />
@@ -127,6 +128,7 @@ export default function PlayerForm({ open, onClose, onSubmit, player }: PlayerFo
                 label="Last Name"
                 fullWidth
                 required
+                disabled
                 value={formData.lastName}
                 onChange={(e) => handleChange('lastName', e.target.value)}
               />
@@ -138,6 +140,7 @@ export default function PlayerForm({ open, onClose, onSubmit, player }: PlayerFo
                 type="email"
                 fullWidth
                 required
+                disabled
                 value={formData.email}
                 onChange={(e) => handleChange('email', e.target.value)}
               />
@@ -253,7 +256,7 @@ export default function PlayerForm({ open, onClose, onSubmit, player }: PlayerFo
           variant="contained"
           disabled={submitting || !formData.firstName || !formData.lastName || !formData.email}
         >
-          {submitting ? 'Saving...' : player ? 'Update' : 'Create'}
+          {submitting ? 'Saving...' : 'Update'}
         </Button>
       </DialogActions>
     </Dialog>
