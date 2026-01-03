@@ -103,13 +103,13 @@ export const playersApi = {
 
 // Enrollments API
 export const enrollmentsApi = {
-  enroll: async (eventId: string, playerId: string): Promise<Enrollment> => {
-    const response = await api.post<ApiResponse<Enrollment>>(`/events/${eventId}/enroll`, { playerId });
+  enroll: async (eventId: string, playerIds: string[]): Promise<Enrollment[]> => {
+    const response = await api.post<ApiResponse<Enrollment[]>>(`/events/${eventId}/enroll`, { playerIds });
     return response.data.data!;
   },
 
-  unenroll: async (eventId: string, enrollmentId: string): Promise<void> => {
-    await api.delete(`/events/${eventId}/enroll/${enrollmentId}`);
+  unenroll: async (eventId: string, enrollmentIds: string[]): Promise<void> => {
+    await api.delete(`/events/${eventId}/enroll`, { data: { enrollmentIds } });
   },
 };
 
