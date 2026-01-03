@@ -14,6 +14,7 @@ import {
   Radio,
   Typography,
   CircularProgress,
+  Chip,
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
 import { Player } from '../../types';
@@ -22,21 +23,59 @@ import { playersApi } from '../../services/api';
 interface AddEnrollmentDialogProps {
   open: boolean;
   onClose: () => void;
-  onAdd: (playerId: string) => Promise<void>;
+  onAdd: (player: Player) => void;
   existingPlayerIds: string[];
+  eventType: string;
 }
+
+// Check if player is eligible for the event type
+function getEligibility(player: Player, eventType: string): { eligible: boolean; reason?: string } {
+  const isActive = player.membershipStatus === 'ACTIVE';
+
+  // GOLD: unlimited everything, but only if active
+  if (player.membershipType === 'GOLD' && isActive) {
+    return { eligible: true };
+  }
+
+  // DROP_IN: unlimited open play if active, otherwise needs credits
+  if (player.membershipType === 'DROP_IN') {
+    if (eventType === 'CLASS' && player.classCredits < 1) {
+      return { eligible: false, reason: 'No class credits' };
+    }
+    if (eventType === 'OPEN_PLAY' && isActive) {
+      return { eligible: true };
+    }
+    // Paused/cancelled DROP_IN for OPEN_PLAY falls through to credit check below
+  }
+
+  // Credit-based eligibility (NONE, or paused/cancelled memberships)
+  if (eventType === 'CLASS' && player.classCredits < 1) {
+    return { eligible: false, reason: 'No class credits' };
+  }
+  if (eventType === 'OPEN_PLAY' && player.dropInCredits < 1) {
+    return { eligible: false, reason: 'No drop-in credits' };
+  }
+
+  return { eligible: true };
+}
+
+const membershipTypeLabels: Record<string, string> = {
+  GOLD: 'Gold',
+  DROP_IN: 'Drop-in',
+  NONE: 'None',
+};
 
 export default function AddEnrollmentDialog({
   open,
   onClose,
   onAdd,
   existingPlayerIds,
+  eventType,
 }: AddEnrollmentDialogProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Player[]>([]);
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [searched, setSearched] = useState(false);
 
   const handleSearch = async () => {
@@ -49,7 +88,7 @@ export default function AddEnrollmentDialog({
       // Filter out players already enrolled
       const available = players.filter((p) => !existingPlayerIds.includes(p.id));
       setSearchResults(available);
-      setSelectedPlayerId(null);
+      setSelectedPlayer(null);
     } catch (error) {
       console.error('Failed to search players:', error);
     } finally {
@@ -57,24 +96,16 @@ export default function AddEnrollmentDialog({
     }
   };
 
-  const handleAdd = async () => {
-    if (!selectedPlayerId) return;
-
-    setSubmitting(true);
-    try {
-      await onAdd(selectedPlayerId);
-      handleClose();
-    } catch (error) {
-      console.error('Failed to add enrollment:', error);
-    } finally {
-      setSubmitting(false);
-    }
+  const handleAdd = () => {
+    if (!selectedPlayer) return;
+    onAdd(selectedPlayer);
+    handleClose();
   };
 
   const handleClose = () => {
     setSearchQuery('');
     setSearchResults([]);
-    setSelectedPlayerId(null);
+    setSelectedPlayer(null);
     setSearched(false);
     onClose();
   };
@@ -112,23 +143,51 @@ export default function AddEnrollmentDialog({
           </Typography>
         ) : (
           <List>
-            {searchResults.map((player) => (
-              <ListItem key={player.id} disablePadding>
-                <ListItemButton
-                  onClick={() => setSelectedPlayerId(player.id)}
-                  selected={selectedPlayerId === player.id}
-                >
-                  <Radio
-                    checked={selectedPlayerId === player.id}
-                    onChange={() => setSelectedPlayerId(player.id)}
-                  />
-                  <ListItemText
-                    primary={`${player.firstName} ${player.lastName}`}
-                    secondary={player.email}
-                  />
-                </ListItemButton>
-              </ListItem>
-            ))}
+            {searchResults.map((player) => {
+              const eligibility = getEligibility(player, eventType);
+              return (
+                <ListItem key={player.id} disablePadding>
+                  <ListItemButton
+                    onClick={() => eligibility.eligible && setSelectedPlayer(player)}
+                    selected={selectedPlayer?.id === player.id}
+                    disabled={!eligibility.eligible}
+                    sx={{ opacity: eligibility.eligible ? 1 : 0.6 }}
+                  >
+                    <Radio
+                      checked={selectedPlayer?.id === player.id}
+                      disabled={!eligibility.eligible}
+                    />
+                    <ListItemText
+                      primary={
+                        <Box className="flex items-center gap-2">
+                          <span>{player.firstName} {player.lastName}</span>
+                          <Chip
+                            label={membershipTypeLabels[player.membershipType]}
+                            size="small"
+                            variant="outlined"
+                          />
+                          {!eligibility.eligible && (
+                            <Chip
+                              label={eligibility.reason}
+                              size="small"
+                              color="error"
+                              variant="outlined"
+                            />
+                          )}
+                        </Box>
+                      }
+                      secondary={
+                        <Box component="span" className="flex gap-4">
+                          <span>{player.email}</span>
+                          <span>Class: {player.classCredits}</span>
+                          <span>Drop-in: {player.dropInCredits}</span>
+                        </Box>
+                      }
+                    />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
           </List>
         )}
       </DialogContent>
@@ -137,9 +196,9 @@ export default function AddEnrollmentDialog({
         <Button
           onClick={handleAdd}
           variant="contained"
-          disabled={!selectedPlayerId || submitting}
+          disabled={!selectedPlayer}
         >
-          {submitting ? 'Adding...' : 'Add'}
+          Add
         </Button>
       </DialogActions>
     </Dialog>

@@ -20,8 +20,8 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
-import { Event, EventFormData, EventType, SkillLevel, GenderCategory, Enrollment } from '../../types';
-import { eventsApi } from '../../services/api';
+import { Event, EventFormData, EventType, SkillLevel, GenderCategory, Enrollment, Player } from '../../types';
+import { eventsApi, enrollmentsApi } from '../../services/api';
 import EnrollmentSection from './EnrollmentSection';
 import { isEventEditable } from '../../utils/eventUtils';
 
@@ -96,6 +96,8 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
   const [submitting, setSubmitting] = useState(false);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [currentEnrollment, setCurrentEnrollment] = useState(0);
+  const [pendingAdds, setPendingAdds] = useState<Record<string, Player>>({});
+  const [pendingRemoves, setPendingRemoves] = useState<Record<string, Enrollment>>({});
 
   const fetchEventDetails = useCallback(async () => {
     if (event?.id) {
@@ -131,12 +133,38 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
       setEnrollments([]);
       setCurrentEnrollment(0);
     }
+    // Reset pending state when dialog opens/closes or event changes
+    setPendingAdds({});
+    setPendingRemoves({});
   }, [event, open, fetchEventDetails]);
 
   const editable = event ? isEventEditable(event.startTime) : true;
 
   const handleChange = (field: keyof FormData, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Pending enrollment handlers
+  const handleAddPending = (player: Player) => {
+    setPendingAdds((prev) => ({ ...prev, [player.id]: player }));
+  };
+
+  const handleRemovePending = (enrollment: Enrollment) => {
+    setPendingRemoves((prev) => ({ ...prev, [enrollment.id]: enrollment }));
+  };
+
+  const handleUndoAdd = (playerId: string) => {
+    setPendingAdds((prev) => {
+      const { [playerId]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const handleUndoRemove = (enrollmentId: string) => {
+    setPendingRemoves((prev) => {
+      const { [enrollmentId]: _, ...rest } = prev;
+      return rest;
+    });
   };
 
   const handleSubmit = async () => {
@@ -148,6 +176,20 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
         endTime: formData.endTime.toDate(),
       };
       await onSubmit(submitData);
+
+      // Submit pending enrollment changes if editing an existing event
+      if (event?.id) {
+        const addIds = Object.keys(pendingAdds);
+        const removeIds = Object.keys(pendingRemoves);
+
+        if (addIds.length > 0) {
+          await enrollmentsApi.enroll(event.id, addIds);
+        }
+        if (removeIds.length > 0) {
+          await enrollmentsApi.unenroll(event.id, removeIds);
+        }
+      }
+
       onClose();
     } catch (error) {
       console.error('Failed to save event:', error);
@@ -330,12 +372,17 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
             <>
               <Divider className="my-4" />
               <EnrollmentSection
-                eventId={event.id}
                 enrollments={enrollments}
                 currentEnrollment={currentEnrollment}
                 maxCapacity={formData.maxCapacity}
                 isEditable={editable}
-                onEnrollmentChange={fetchEventDetails}
+                eventType={formData.eventType}
+                pendingAdds={pendingAdds}
+                pendingRemoves={pendingRemoves}
+                onAddPending={handleAddPending}
+                onRemovePending={handleRemovePending}
+                onUndoAdd={handleUndoAdd}
+                onUndoRemove={handleUndoRemove}
               />
             </>
           )}

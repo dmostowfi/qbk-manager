@@ -13,18 +13,22 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { Enrollment, EnrollmentStatus } from '../../types';
-import { enrollmentsApi } from '../../services/api';
+import { Add as AddIcon, Delete as DeleteIcon, Undo as UndoIcon } from '@mui/icons-material';
+import { Enrollment, EnrollmentStatus, Player } from '../../types';
 import AddEnrollmentDialog from './AddEnrollmentDialog';
 
 interface EnrollmentSectionProps {
-  eventId: string;
   enrollments: Enrollment[];
   currentEnrollment: number;
   maxCapacity: number;
   isEditable: boolean;
-  onEnrollmentChange: () => void;
+  eventType: string;
+  pendingAdds: Record<string, Player>;
+  pendingRemoves: Record<string, Enrollment>;
+  onAddPending: (player: Player) => void;
+  onRemovePending: (enrollment: Enrollment) => void;
+  onUndoAdd: (playerId: string) => void;
+  onUndoRemove: (enrollmentId: string) => void;
 }
 
 const statusColors: Record<EnrollmentStatus, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
@@ -36,32 +40,45 @@ const statusColors: Record<EnrollmentStatus, 'success' | 'warning' | 'error' | '
 };
 
 export default function EnrollmentSection({
-  eventId,
   enrollments,
   currentEnrollment,
   maxCapacity,
   isEditable,
-  onEnrollmentChange,
+  eventType,
+  pendingAdds,
+  pendingRemoves,
+  onAddPending,
+  onRemovePending,
+  onUndoAdd,
+  onUndoRemove,
 }: EnrollmentSectionProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
-  const handleAddEnrollment = async (playerId: string) => {
-    await enrollmentsApi.enroll(eventId, playerId);
-    onEnrollmentChange();
-  };
+  // Existing player IDs + pending add IDs (to exclude from add dialog)
+  const existingPlayerIds = [
+    ...enrollments.map((e) => e.playerId),
+    ...Object.keys(pendingAdds),
+  ];
 
-  const handleRemoveEnrollment = async (enrollmentId: string) => {
-    await enrollmentsApi.unenroll(eventId, enrollmentId);
-    onEnrollmentChange();
-  };
+  // Calculate display count (current + pending adds - pending removes)
+  const pendingAddCount = Object.keys(pendingAdds).length;
+  const pendingRemoveCount = Object.keys(pendingRemoves).length;
+  const displayCount = currentEnrollment + pendingAddCount - pendingRemoveCount;
 
-  const existingPlayerIds = enrollments.map((e) => e.playerId);
+  const hasPendingChanges = pendingAddCount > 0 || pendingRemoveCount > 0;
+  const pendingAddsList = Object.values(pendingAdds);
+  const hasAnyRows = enrollments.length > 0 || pendingAddsList.length > 0;
 
   return (
     <Box>
       <Box className="flex justify-between items-center mb-2">
         <Typography variant="subtitle1" className="font-medium">
-          Enrollments ({currentEnrollment}/{maxCapacity})
+          Enrollments ({displayCount}/{maxCapacity})
+          {hasPendingChanges && (
+            <Typography component="span" variant="body2" color="warning.main" className="ml-2">
+              (unsaved changes)
+            </Typography>
+          )}
         </Typography>
         {isEditable && (
           <Button
@@ -74,7 +91,7 @@ export default function EnrollmentSection({
         )}
       </Box>
 
-      {enrollments.length === 0 ? (
+      {!hasAnyRows ? (
         <Typography color="text.secondary" variant="body2">
           No enrollments
         </Typography>
@@ -90,28 +107,84 @@ export default function EnrollmentSection({
               </TableRow>
             </TableHead>
             <TableBody>
-              {enrollments.map((enrollment) => (
-                <TableRow key={enrollment.id}>
+              {/* Existing enrollments */}
+              {enrollments.map((enrollment) => {
+                const isPendingRemove = enrollment.id in pendingRemoves;
+                return (
+                  <TableRow
+                    key={enrollment.id}
+                    sx={{
+                      opacity: isPendingRemove ? 0.5 : 1,
+                      textDecoration: isPendingRemove ? 'line-through' : 'none',
+                    }}
+                  >
+                    <TableCell>
+                      {enrollment.player?.firstName} {enrollment.player?.lastName}
+                    </TableCell>
+                    <TableCell>{enrollment.player?.email}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={isPendingRemove ? 'REMOVING' : enrollment.status}
+                        color={isPendingRemove ? 'error' : statusColors[enrollment.status]}
+                        size="small"
+                        variant={isPendingRemove ? 'outlined' : 'filled'}
+                      />
+                    </TableCell>
+                    {isEditable && (
+                      <TableCell align="right">
+                        {isPendingRemove ? (
+                          <Tooltip title="Undo remove">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => onUndoRemove(enrollment.id)}
+                            >
+                              <UndoIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title="Remove">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => onRemovePending(enrollment)}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+              {/* Pending adds */}
+              {pendingAddsList.map((player) => (
+                <TableRow
+                  key={`pending-${player.id}`}
+                  sx={{ backgroundColor: 'action.hover' }}
+                >
                   <TableCell>
-                    {enrollment.player?.firstName} {enrollment.player?.lastName}
+                    {player.firstName} {player.lastName}
                   </TableCell>
-                  <TableCell>{enrollment.player?.email}</TableCell>
+                  <TableCell>{player.email}</TableCell>
                   <TableCell>
                     <Chip
-                      label={enrollment.status}
-                      color={statusColors[enrollment.status]}
+                      label="PENDING"
+                      color="info"
                       size="small"
+                      variant="outlined"
                     />
                   </TableCell>
                   {isEditable && (
                     <TableCell align="right">
-                      <Tooltip title="Remove">
+                      <Tooltip title="Undo add">
                         <IconButton
                           size="small"
-                          color="error"
-                          onClick={() => handleRemoveEnrollment(enrollment.id)}
+                          color="primary"
+                          onClick={() => onUndoAdd(player.id)}
                         >
-                          <DeleteIcon fontSize="small" />
+                          <UndoIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </TableCell>
@@ -126,8 +199,9 @@ export default function EnrollmentSection({
       <AddEnrollmentDialog
         open={addDialogOpen}
         onClose={() => setAddDialogOpen(false)}
-        onAdd={handleAddEnrollment}
+        onAdd={onAddPending}
         existingPlayerIds={existingPlayerIds}
+        eventType={eventType}
       />
     </Box>
   );
