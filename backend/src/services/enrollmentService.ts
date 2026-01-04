@@ -4,21 +4,26 @@ import { isEventEditable } from '../utils/eventUtils.js';
 const prisma = new PrismaClient();
 
 // Credit calculation helper
-function calculateCreditsNeeded(membershipType: string, eventType: string) {
-  // GOLD: unlimited everything
-  if (membershipType === 'GOLD') {
+function calculateCreditsNeeded(membershipType: string, membershipStatus: string, eventType: string) {
+  const isActive = membershipStatus === 'ACTIVE';
+
+  // GOLD + ACTIVE: unlimited everything
+  if (membershipType === 'GOLD' && isActive) {
     return { classCredits: 0, dropInCredits: 0 };
   }
 
-  // DROP_IN: unlimited open play, pay for classes
+  // DROP_IN: unlimited open play if active, always pay for classes
   if (membershipType === 'DROP_IN') {
-    return {
-      classCredits: eventType === 'CLASS' ? 1 : 0,
-      dropInCredits: 0,
-    };
+    if (eventType === 'CLASS') {
+      return { classCredits: 1, dropInCredits: 0 };
+    }
+    if (isActive) {
+      return { classCredits: 0, dropInCredits: 0 };
+    }
+    // Paused/cancelled DROP_IN for OPEN_PLAY falls through to credit-based
   }
 
-  // NONE: pay for everything
+  // Credit-based: NONE, or paused/cancelled memberships
   return {
     classCredits: eventType === 'CLASS' ? 1 : 0,
     dropInCredits: eventType === 'OPEN_PLAY' ? 1 : 0,
@@ -59,7 +64,7 @@ export const enrollmentService = {
         }
 
         // Calculate credits needed
-        const creditsNeeded = calculateCreditsNeeded(player.membershipType, event.eventType);
+        const creditsNeeded = calculateCreditsNeeded(player.membershipType, player.membershipStatus, event.eventType);
 
         // Validate sufficient credits
         if (creditsNeeded.classCredits > player.classCredits) {
@@ -131,6 +136,7 @@ export const enrollmentService = {
         // Calculate credits to refund
         const creditsToRefund = calculateCreditsNeeded(
           enrollment.player.membershipType,
+          enrollment.player.membershipStatus,
           enrollment.event.eventType
         );
 

@@ -38,16 +38,11 @@ export const enrollmentController = {
 
   async unenroll(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id: eventId, enrollmentId: paramEnrollmentId } = req.params;
+      const { id: eventId } = req.params;
       const { enrollmentId, enrollmentIds } = req.body;
 
-      // Normalize to array - accept from URL param, body single, or body array
+      // Normalize to array - accept single enrollmentId or array of enrollmentIds
       const ids = enrollmentIds || (enrollmentId ? [enrollmentId] : []);
-
-      // Support existing URL-based single unenroll: DELETE /events/:id/enroll/:enrollmentId
-      if (ids.length === 0 && paramEnrollmentId) {
-        ids.push(paramEnrollmentId);
-      }
 
       if (ids.length === 0) {
         throw createError('enrollmentId or enrollmentIds is required', 400);

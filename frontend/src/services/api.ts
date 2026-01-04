@@ -109,7 +109,7 @@ export const enrollmentsApi = {
   },
 
   unenroll: async (eventId: string, enrollmentIds: string[]): Promise<void> => {
-    await api.delete(`/events/${eventId}/enroll`, { data: { enrollmentIds } });
+    await api.post(`/events/${eventId}/unenroll`, { enrollmentIds });
   },
 };
 
