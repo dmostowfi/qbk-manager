@@ -17,6 +17,7 @@ import {
   Menu as MenuIcon,
   Event as EventIcon,
   People as PeopleIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import { UserButton } from '@clerk/clerk-react';
 import { useState } from 'react';
@@ -31,6 +32,7 @@ const drawerWidth = 240;
 const menuItems = [
   { text: 'Events', icon: <EventIcon />, path: '/events' },
   { text: 'Players', icon: <PeopleIcon />, path: '/players' },
+  { text: 'My Profile', icon: <PersonIcon />, path: '/profile' },
 ];
 
 export default function Layout({ children }: LayoutProps) {

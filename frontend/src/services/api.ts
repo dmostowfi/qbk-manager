@@ -113,4 +113,17 @@ export const enrollmentsApi = {
   },
 };
 
+// Me API (current user's own data)
+export const meApi = {
+  getProfile: async (): Promise<Player> => {
+    const response = await api.get<ApiResponse<Player>>('/me');
+    return response.data.data!;
+  },
+
+  getEnrollments: async (): Promise<Enrollment[]> => {
+    const response = await api.get<ApiResponse<Enrollment[]>>('/me/enrollments');
+    return response.data.data || [];
+  },
+};
+
 export default api;
