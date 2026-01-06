@@ -14,6 +14,24 @@ export type {
   EventStatus,
 } from '@prisma/client';
 
+// Auth types
+export type AppRole = 'admin' | 'staff' | 'player';
+
+export interface AuthContext {
+  userId: string;      // Clerk user ID
+  role: AppRole;       // Resolved application role
+  playerId?: string;   // Player ID if role is 'player' and acting on self
+}
+
+// Extend Express Request
+declare global {
+  namespace Express {
+    interface Request {
+      authContext?: AuthContext;
+    }
+  }
+}
+
 // API Response types
 export interface ApiResponse<T> {
   success: boolean;

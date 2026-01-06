@@ -15,7 +15,8 @@ export const enrollmentController = {
         throw createError('playerId or playerIds is required', 400);
       }
 
-      const enrollments = await enrollmentService.enroll(eventId, ids);
+      // Pass auth context for belt-and-suspenders ownership validation
+      const enrollments = await enrollmentService.enroll(eventId, ids, req.authContext);
       res.status(201).json({ success: true, data: enrollments });
     } catch (error) {
       if (error instanceof Error) {
@@ -29,6 +30,9 @@ export const enrollmentController = {
           return next(createError(error.message, 400));
         }
         if (error.message === 'Event can no longer be modified') {
+          return next(createError(error.message, 403));
+        }
+        if (error.message === 'Players can only enroll themselves') {
           return next(createError(error.message, 403));
         }
       }
@@ -48,7 +52,8 @@ export const enrollmentController = {
         throw createError('enrollmentId or enrollmentIds is required', 400);
       }
 
-      await enrollmentService.unenroll(eventId, ids);
+      // Pass auth context for belt-and-suspenders ownership validation
+      await enrollmentService.unenroll(eventId, ids, req.authContext);
       res.json({ success: true, message: 'Enrollment(s) removed successfully' });
     } catch (error) {
       if (error instanceof Error) {
@@ -59,6 +64,9 @@ export const enrollmentController = {
           return next(createError(error.message, 400));
         }
         if (error.message === 'Event can no longer be modified') {
+          return next(createError(error.message, 403));
+        }
+        if (error.message === 'Players can only remove their own enrollments') {
           return next(createError(error.message, 403));
         }
       }
