@@ -36,15 +36,18 @@ async function getEffectiveRole(
     }
   }
 
-  // Not staff - check if acting on self (player role)
-  if (targetPlayerId) {
-    const player = await prisma.player.findUnique({
-      where: { clerkId: userId },
-      select: { id: true },
-    });
-    if (player?.id === targetPlayerId) {
-      return { role: 'player', playerId: player.id };
+  // Not staff - check if user has a Player record
+  const player = await prisma.player.findUnique({
+    where: { clerkId: userId },
+    select: { id: true },
+  });
+
+  if (player) {
+    // If targetPlayerId specified, must match (ownership check)
+    if (targetPlayerId && player.id !== targetPlayerId) {
+      return undefined; // Trying to act on someone else's data
     }
+    return { role: 'player', playerId: player.id };
   }
 
   // No valid role for this action
