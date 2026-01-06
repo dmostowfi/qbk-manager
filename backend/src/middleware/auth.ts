@@ -1,10 +1,11 @@
 import { getAuth, clerkClient } from '@clerk/express';
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { AppRole } from '../types/index.js';
 
 const prisma = new PrismaClient();
 
-type Role = 'admin' | 'staff' | 'player';
+type Role = AppRole;
 
 const QBK_ORG_ID = process.env.CLERK_ORG_ID;
 
@@ -14,11 +15,16 @@ const orgRoleToAppRole: Record<string, 'admin' | 'staff'> = {
   'org:member': 'staff',
 };
 
+interface RoleResult {
+  role: Role;
+  playerId?: string; // Set when role is 'player' and acting on self
+}
+
 // Get the effective role for this request
 async function getEffectiveRole(
   userId: string,
   targetPlayerId?: string
-): Promise<Role | undefined> {
+): Promise<RoleResult | undefined> {
   // Check org membership first (admin/staff)
   if (QBK_ORG_ID) {
     const orgList = await clerkClient.users.getOrganizationMembershipList({ userId });
@@ -26,7 +32,7 @@ async function getEffectiveRole(
 
     if (qbkStaff) {
       const orgRole = orgRoleToAppRole[qbkStaff.role];
-      if (orgRole) return orgRole;
+      if (orgRole) return { role: orgRole };
     }
   }
 
@@ -36,7 +42,9 @@ async function getEffectiveRole(
       where: { clerkId: userId },
       select: { id: true },
     });
-    if (player?.id === targetPlayerId) return 'player';
+    if (player?.id === targetPlayerId) {
+      return { role: 'player', playerId: player.id };
+    }
   }
 
   // No valid role for this action
@@ -58,11 +66,18 @@ export function requireRole(
 
     try {
       const targetPlayerId = getTargetPlayerId?.(req);
-      const role = await getEffectiveRole(userId, targetPlayerId);
+      const result = await getEffectiveRole(userId, targetPlayerId);
 
-      if (!role || !roles.includes(role)) {
+      if (!result || !roles.includes(result.role)) {
         return res.status(403).json({ error: 'Forbidden' });
       }
+
+      // Attach auth context to request for downstream use
+      req.authContext = {
+        userId,
+        role: result.role,
+        playerId: result.playerId,
+      };
 
       next();
     } catch (error) {
