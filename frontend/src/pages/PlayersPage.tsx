@@ -12,10 +12,10 @@ import {
   Paper,
   Chip,
   IconButton,
-  Tooltip,
   CircularProgress,
   Alert,
   TextField,
+  Tooltip,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -69,10 +69,6 @@ export default function PlayersPage() {
     if (selectedPlayer) {
       await updatePlayer(selectedPlayer.id, data);
     }
-  };
-
-  const getTotalCredits = (player: Player) => {
-    return player.classCredits + player.dropInCredits;
   };
 
   if (loading) {
@@ -136,7 +132,8 @@ export default function PlayersPage() {
                 <TableCell>Phone</TableCell>
                 <TableCell>Membership</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell align="right">Credits</TableCell>
+                <TableCell align="right">Class Credits</TableCell>
+                <TableCell align="right">Drop-in Credits</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -168,15 +165,8 @@ export default function PlayersPage() {
                       variant="outlined"
                     />
                   </TableCell>
-                  <TableCell align="right">
-                    {getTotalCredits(player) > 0 ? (
-                      <Tooltip title={`Class: ${player.classCredits}, Drop-in: ${player.dropInCredits}`}>
-                        <span>{getTotalCredits(player)}</span>
-                      </Tooltip>
-                    ) : (
-                      '-'
-                    )}
-                  </TableCell>
+                  <TableCell align="right">{player.classCredits}</TableCell>
+                  <TableCell align="right">{player.dropInCredits}</TableCell>
                   <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                     <Tooltip title="Edit">
                       <IconButton size="small" onClick={() => handleOpenForm(player)}>
