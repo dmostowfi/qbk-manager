@@ -6,17 +6,23 @@ export const enrollmentController = {
   async enroll(req: Request, res: Response, next: NextFunction) {
     try {
       const { id: eventId } = req.params;
-      const { playerId, playerIds } = req.body;
+      const authContext = req.authContext!;
 
-      // Normalize to array - accept single playerId or array of playerIds
-      const ids = playerIds || (playerId ? [playerId] : []);
-
-      if (ids.length === 0) {
-        throw createError('playerId or playerIds is required', 400);
+      // Determine player IDs based on role
+      let ids: string[];
+      if (authContext.role === 'player') {
+        // Players can only enroll themselves - use ID from auth, ignore request body
+        ids = [authContext.playerId!];
+      } else {
+        // Staff/admin can enroll anyone - use IDs from request body
+        const { playerId, playerIds } = req.body;
+        ids = playerIds || (playerId ? [playerId] : []);
+        if (ids.length === 0) {
+          throw createError('playerId or playerIds is required', 400);
+        }
       }
 
-      // Pass auth context for belt-and-suspenders ownership validation
-      const enrollments = await enrollmentService.enroll(eventId, ids, req.authContext);
+      const enrollments = await enrollmentService.enroll(eventId, ids);
       res.status(201).json({ success: true, data: enrollments });
     } catch (error) {
       if (error instanceof Error) {
@@ -30,9 +36,6 @@ export const enrollmentController = {
           return next(createError(error.message, 400));
         }
         if (error.message === 'Event can no longer be modified') {
-          return next(createError(error.message, 403));
-        }
-        if (error.message === 'Players can only enroll themselves') {
           return next(createError(error.message, 403));
         }
       }
@@ -52,8 +55,7 @@ export const enrollmentController = {
         throw createError('enrollmentId or enrollmentIds is required', 400);
       }
 
-      // Pass auth context for belt-and-suspenders ownership validation
-      await enrollmentService.unenroll(eventId, ids, req.authContext);
+      await enrollmentService.unenroll(eventId, ids);
       res.json({ success: true, message: 'Enrollment(s) removed successfully' });
     } catch (error) {
       if (error instanceof Error) {
@@ -64,9 +66,6 @@ export const enrollmentController = {
           return next(createError(error.message, 400));
         }
         if (error.message === 'Event can no longer be modified') {
-          return next(createError(error.message, 403));
-        }
-        if (error.message === 'Players can only remove their own enrollments') {
           return next(createError(error.message, 403));
         }
       }

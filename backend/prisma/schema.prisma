@@ -30,6 +30,17 @@ model Player {
   transactions     Transaction[]
 }
 
+model Staff {
+  id        String    @id @default(uuid())
+  clerkId   String?   @unique
+  email     String    @unique
+  firstName String
+  lastName  String
+  role      StaffRole @default(STAFF)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
 model Event {
   id                String         @id @default(uuid())
   title             String
@@ -72,6 +83,11 @@ model Transaction {
   dropInCredits   Int             @default(0)
   createdAt       DateTime        @default(now())
   player          Player          @relation(fields: [playerId], references: [id])
+}
+
+enum StaffRole {
+  ADMIN
+  STAFF
 }
 
 enum MembershipType {
