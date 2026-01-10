@@ -15,11 +15,12 @@ export const enrollmentController = {
         ids = [authContext.playerId!];
       } else {
         // Staff/admin can enroll anyone - use IDs from request body
-        const { playerId, playerIds } = req.body;
-        ids = playerIds || (playerId ? [playerId] : []);
-        if (ids.length === 0) {
-          throw createError('playerId or playerIds is required', 400);
+        const { playerIds } = req.body;
+        console.log('Staff/admin enrollment request:', { playerIds });
+        if (!playerIds || playerIds.length === 0) {
+          throw createError('playerIds is required', 400);
         }
+        ids = playerIds;
       }
 
       const enrollments = await enrollmentService.enroll(eventId, ids);
