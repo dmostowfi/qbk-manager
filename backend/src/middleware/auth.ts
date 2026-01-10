@@ -1,4 +1,4 @@
-import { getAuth, clerkClient } from '@clerk/express';
+import { getAuth } from '@clerk/express';
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AppRole } from '../types/index.js';
@@ -7,59 +7,39 @@ const prisma = new PrismaClient();
 
 type Role = AppRole;
 
-const QBK_ORG_ID = process.env.CLERK_ORG_ID;
-
-// Map Clerk org roles to our app roles
-const orgRoleToAppRole: Record<string, 'admin' | 'staff'> = {
-  'org:admin': 'admin',
-  'org:member': 'staff',
-};
-
 interface RoleResult {
   role: Role;
-  playerId?: string; // Set when role is 'player' and acting on self
+  playerId?: string; // Set when role is 'player' (cached from lookup)
 }
 
-// Get the effective role for this request
-async function getEffectiveRole(
-  userId: string,
-  targetPlayerId?: string
-): Promise<RoleResult | undefined> {
-  // Check org membership first (admin/staff)
-  if (QBK_ORG_ID) {
-    const orgList = await clerkClient.users.getOrganizationMembershipList({ userId });
-    const qbkStaff = orgList.data.find(entry => entry.organization.id === QBK_ORG_ID);
+// Get the effective role for this user
+async function getEffectiveRole(userId: string): Promise<RoleResult | undefined> {
+  // Check Staff table first (admin/staff)
+  const staff = await prisma.staff.findUnique({
+    where: { clerkId: userId },
+    select: { role: true },
+  });
 
-    if (qbkStaff) {
-      const orgRole = orgRoleToAppRole[qbkStaff.role];
-      if (orgRole) return { role: orgRole };
-    }
+  if (staff) {
+    // StaffRole enum is 'ADMIN' | 'STAFF', convert to lowercase for AppRole
+    return { role: staff.role.toLowerCase() as Role };
   }
 
-  // Not staff - check if user has a Player record
+  // Not staff - check Player table
   const player = await prisma.player.findUnique({
     where: { clerkId: userId },
     select: { id: true },
   });
 
   if (player) {
-    // If targetPlayerId specified, must match (ownership check)
-    if (targetPlayerId && player.id !== targetPlayerId) {
-      return undefined; // Trying to act on someone else's data
-    }
     return { role: 'player', playerId: player.id };
   }
 
-  // No valid role for this action
+  // User exists in Clerk but not in our database yet
   return undefined;
 }
 
-type TargetPlayerIdExtractor = (req: Request) => string | undefined;
-
-export function requireRole(
-  roles: Role[],
-  getTargetPlayerId?: TargetPlayerIdExtractor
-) {
+export function requireRole(roles: Role[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const { userId } = getAuth(req);
 
@@ -68,8 +48,7 @@ export function requireRole(
     }
 
     try {
-      const targetPlayerId = getTargetPlayerId?.(req);
-      const result = await getEffectiveRole(userId, targetPlayerId);
+      const result = await getEffectiveRole(userId);
 
       if (!result || !roles.includes(result.role)) {
         return res.status(403).json({ error: 'Forbidden' });
@@ -79,7 +58,7 @@ export function requireRole(
       req.authContext = {
         userId,
         role: result.role,
-        playerId: result.playerId,
+        playerId: result.playerId, // Only set for players (optimization)
       };
 
       next();
@@ -89,6 +68,3 @@ export function requireRole(
     }
   };
 }
-
-// Convenience shorthand for staff-only routes
-export const requireStaff = requireRole(['admin', 'staff']);

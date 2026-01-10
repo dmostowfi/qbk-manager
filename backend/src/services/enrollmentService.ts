@@ -1,6 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { isEventEditable } from '../utils/eventUtils.js';
-import { AuthContext } from '../types/index.js';
 
 const prisma = new PrismaClient();
 
@@ -35,18 +34,9 @@ export const enrollmentService = {
   /**
    * Enroll players in an event
    * @param eventId - Event to enroll in
-   * @param playerIds - Player IDs to enroll
-   * @param authContext - Optional auth context for ownership validation (belt & suspenders)
+   * @param playerIds - Player IDs to enroll (controller handles role-based ID selection)
    */
-  async enroll(eventId: string, playerIds: string[], authContext?: AuthContext) {
-    // Belt & suspenders: If role is 'player', verify they're only enrolling themselves
-    if (authContext?.role === 'player') {
-      const unauthorized = playerIds.filter(id => id !== authContext.playerId);
-      if (unauthorized.length > 0) {
-        throw new Error('Players can only enroll themselves');
-      }
-    }
-
+  async enroll(eventId: string, playerIds: string[]) {
     // Get event and check it exists
     const event = await prisma.event.findUnique({ where: { id: eventId } });
     if (!event) {
@@ -126,12 +116,11 @@ export const enrollmentService = {
   },
 
   /**
-   * Remove enrollments from an event
+   * Remove enrollments from an event (staff-only operation)
    * @param eventId - Event to unenroll from
    * @param enrollmentIds - Enrollment IDs to remove
-   * @param authContext - Optional auth context for ownership validation (belt & suspenders)
    */
-  async unenroll(eventId: string, enrollmentIds: string[], authContext?: AuthContext) {
+  async unenroll(eventId: string, enrollmentIds: string[]) {
     // Use transaction to ensure all unenrollments succeed or fail together
     return prisma.$transaction(async (tx) => {
       for (const enrollmentId of enrollmentIds) {
@@ -142,11 +131,6 @@ export const enrollmentService = {
         });
         if (!enrollment) {
           throw new Error(`Enrollment ${enrollmentId} not found`);
-        }
-
-        // Belt & suspenders: If role is 'player', verify they own this enrollment
-        if (authContext?.role === 'player' && enrollment.playerId !== authContext.playerId) {
-          throw new Error('Players can only remove their own enrollments');
         }
 
         // Verify it belongs to the correct event

@@ -60,20 +60,46 @@ router.post('/clerk', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No email provided' });
     }
 
-    // Skip Player creation for employees (identified by email domain)
-    if (EMPLOYEE_EMAIL_DOMAIN && email.endsWith(EMPLOYEE_EMAIL_DOMAIN)) {
-      console.log(`Skipping Player creation for employee ${email}`);
-      return res.status(200).json({ success: true, message: 'Employee account, no Player created' });
-    }
-
     try {
-      // Check if player already exists (by email or clerkId)
+      // Employee domain → create Staff record
+      if (EMPLOYEE_EMAIL_DOMAIN && email.endsWith(EMPLOYEE_EMAIL_DOMAIN)) {
+        const existingStaff = await prisma.staff.findFirst({
+          where: {
+            OR: [{ email }, { clerkId: id }],
+          },
+        });
+
+        if (existingStaff) {
+          // Link existing staff to Clerk account if not already linked
+          if (!existingStaff.clerkId) {
+            await prisma.staff.update({
+              where: { id: existingStaff.id },
+              data: { clerkId: id },
+            });
+            console.log(`Linked existing staff ${email} to Clerk ID ${id}`);
+          }
+          return res.status(200).json({ success: true, message: 'Staff already exists' });
+        }
+
+        // Create new staff record
+        const staff = await prisma.staff.create({
+          data: {
+            clerkId: id,
+            email,
+            firstName: first_name || '',
+            lastName: last_name || '',
+            role: 'STAFF', // Default to STAFF, promote to ADMIN via UI later
+          },
+        });
+
+        console.log(`Created staff ${email} with Clerk ID ${id}`);
+        return res.status(200).json({ success: true, staffId: staff.id });
+      }
+
+      // Non-employee → create Player record
       const existingPlayer = await prisma.player.findFirst({
         where: {
-          OR: [
-            { email },
-            { clerkId: id },
-          ],
+          OR: [{ email }, { clerkId: id }],
         },
       });
 
@@ -106,8 +132,8 @@ router.post('/clerk', async (req: Request, res: Response) => {
       console.log(`Created player ${email} with Clerk ID ${id}`);
       return res.status(200).json({ success: true, playerId: player.id });
     } catch (error) {
-      console.error('Error creating player:', error);
-      return res.status(500).json({ error: 'Failed to create player' });
+      console.error('Error creating user record:', error);
+      return res.status(500).json({ error: 'Failed to create user record' });
     }
   }
 
