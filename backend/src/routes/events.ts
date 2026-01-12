@@ -16,6 +16,6 @@ router.delete('/:id', requireRole(['admin', 'staff']), eventsController.delete);
 
 // Enrollment routes
 router.post('/:id/enroll', requireRole(['admin', 'staff', 'player']), enrollmentController.enroll);
-router.post('/:id/unenroll', requireRole(['admin', 'staff']), enrollmentController.unenroll);
+router.post('/:id/unenroll', requireRole(['admin', 'staff', 'player']), enrollmentController.unenroll);
 
 export default router;

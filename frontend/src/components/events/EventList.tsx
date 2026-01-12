@@ -9,9 +9,10 @@ interface EventListProps {
   onEdit: (event: Event) => void;
   onDelete: (event: Event) => void;
   onView: (event: Event) => void;
+  canEdit?: boolean;
 }
 
-export default function EventList({ events, loading, error, onEdit, onDelete, onView }: EventListProps) {
+export default function EventList({ events, loading, error, onEdit, onDelete, onView, canEdit = false }: EventListProps) {
   if (loading) {
     return (
       <Box className="flex justify-center items-center py-12">
@@ -44,7 +45,7 @@ export default function EventList({ events, loading, error, onEdit, onDelete, on
   return (
     <Box className="flex flex-col gap-2">
       {events.map((event) => (
-        <EventCard key={event.id} event={event} onEdit={onEdit} onDelete={onDelete} onView={onView} />
+        <EventCard key={event.id} event={event} onEdit={onEdit} onDelete={onDelete} onView={onView} canEdit={canEdit} />
       ))}
     </Box>
   );

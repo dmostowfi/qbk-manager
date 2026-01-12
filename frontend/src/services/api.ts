@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Event, EventFormData, EventFilters, ApiResponse, Player, Enrollment } from '../types';
+import { Event, EventFormData, EventFilters, ApiResponse, Player, Enrollment, UserProfile } from '../types';
 
 export interface PlayerFilters {
   membershipType?: string;
@@ -115,8 +115,8 @@ export const enrollmentsApi = {
 
 // Me API (current user's own data)
 export const meApi = {
-  getProfile: async (): Promise<Player> => {
-    const response = await api.get<ApiResponse<Player>>('/me');
+  getProfile: async (): Promise<UserProfile> => {
+    const response = await api.get<ApiResponse<UserProfile>>('/me');
     return response.data.data!;
   },
 

@@ -61,6 +61,9 @@ export function requireRole(roles: Role[]) {
         playerId: result.playerId, // Only set for players (optimization)
       };
 
+      // Expose role to frontend via response header
+      res.setHeader('X-User-Role', result.role);
+
       next();
     } catch (error) {
       console.error('Error checking authorization:', error);

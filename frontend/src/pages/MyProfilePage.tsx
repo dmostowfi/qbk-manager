@@ -8,7 +8,7 @@ import {
   Alert,
   Grid,
 } from '@mui/material';
-import { Player } from '../types';
+import { UserProfile } from '../types';
 import { meApi } from '../services/api';
 
 const membershipTypeLabels: Record<string, string> = {
@@ -29,8 +29,20 @@ const membershipStatusColors: Record<string, 'success' | 'warning' | 'error'> = 
   CANCELLED: 'error',
 };
 
+const roleLabels: Record<string, string> = {
+  admin: 'Admin',
+  staff: 'Staff',
+  player: 'Player',
+};
+
+const roleColors: Record<string, 'error' | 'primary' | 'success'> = {
+  admin: 'error',
+  staff: 'primary',
+  player: 'success',
+};
+
 export default function MyProfilePage() {
-  const [player, setPlayer] = useState<Player | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +50,7 @@ export default function MyProfilePage() {
     const fetchProfile = async () => {
       try {
         const data = await meApi.getProfile();
-        setPlayer(data);
+        setProfile(data);
       } catch (err) {
         setError('Failed to load profile');
         console.error(err);
@@ -57,9 +69,11 @@ export default function MyProfilePage() {
     );
   }
 
-  if (error || !player) {
+  if (error || !profile) {
     return <Alert severity="error">{error || 'Profile not found'}</Alert>;
   }
+
+  const isPlayer = profile.role === 'player';
 
   return (
     <Box>
@@ -74,61 +88,74 @@ export default function MyProfilePage() {
               Name
             </Typography>
             <Typography variant="body1" gutterBottom>
-              {player.firstName} {player.lastName}
+              {profile.firstName} {profile.lastName}
             </Typography>
 
             <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
               Email
             </Typography>
             <Typography variant="body1" gutterBottom>
-              {player.email}
+              {profile.email}
             </Typography>
 
-            {player.phone && (
+            {profile.phone && (
               <>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
                   Phone
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  {player.phone}
+                  {profile.phone}
                 </Typography>
               </>
             )}
-          </Grid>
 
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" color="text.secondary">
-              Membership
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
+              Role
             </Typography>
-            <Box sx={{ mb: 2, mt: 0.5 }}>
+            <Box sx={{ mt: 0.5 }}>
               <Chip
-                label={membershipTypeLabels[player.membershipType]}
-                color={membershipTypeColors[player.membershipType]}
+                label={roleLabels[profile.role]}
+                color={roleColors[profile.role]}
                 size="small"
-                sx={{ mr: 1 }}
-              />
-              <Chip
-                label={player.membershipStatus}
-                color={membershipStatusColors[player.membershipStatus]}
-                size="small"
-                variant="outlined"
               />
             </Box>
-
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
-              Class Credits
-            </Typography>
-            <Typography variant="h6" gutterBottom>
-              {player.classCredits}
-            </Typography>
-
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
-              Drop-in Credits
-            </Typography>
-            <Typography variant="h6" gutterBottom>
-              {player.dropInCredits}
-            </Typography>
           </Grid>
+
+          {isPlayer && (
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Membership
+              </Typography>
+              <Box sx={{ mb: 2, mt: 0.5 }}>
+                <Chip
+                  label={membershipTypeLabels[profile.membershipType!]}
+                  color={membershipTypeColors[profile.membershipType!]}
+                  size="small"
+                  sx={{ mr: 1 }}
+                />
+                <Chip
+                  label={profile.membershipStatus}
+                  color={membershipStatusColors[profile.membershipStatus!]}
+                  size="small"
+                  variant="outlined"
+                />
+              </Box>
+
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
+                Class Credits
+              </Typography>
+              <Typography variant="h6" gutterBottom>
+                {profile.classCredits}
+              </Typography>
+
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 2 }}>
+                Drop-in Credits
+              </Typography>
+              <Typography variant="h6" gutterBottom>
+                {profile.dropInCredits}
+              </Typography>
+            </Grid>
+          )}
         </Grid>
       </Paper>
     </Box>

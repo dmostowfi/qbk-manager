@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useMemo } from 'react';
 import {
   AppBar,
   Box,
@@ -22,6 +22,8 @@ import {
 import { UserButton } from '@clerk/clerk-react';
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { AppRole } from '../types';
 
 interface LayoutProps {
   children: ReactNode;
@@ -29,9 +31,16 @@ interface LayoutProps {
 
 const drawerWidth = 240;
 
-const menuItems = [
+interface MenuItem {
+  text: string;
+  icon: ReactNode;
+  path: string;
+  roles?: AppRole[];
+}
+
+const menuItems: MenuItem[] = [
   { text: 'Events', icon: <EventIcon />, path: '/events' },
-  { text: 'Players', icon: <PeopleIcon />, path: '/players' },
+  { text: 'Players', icon: <PeopleIcon />, path: '/players', roles: ['admin', 'staff'] },
   { text: 'My Profile', icon: <PersonIcon />, path: '/profile' },
 ];
 
@@ -39,6 +48,11 @@ export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { role } = useAuth();
+
+  const visibleMenuItems = useMemo(() => {
+    return menuItems.filter((item) => !item.roles || (role && item.roles.includes(role)));
+  }, [role]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -52,7 +66,7 @@ export default function Layout({ children }: LayoutProps) {
         </Typography>
       </Toolbar>
       <List>
-        {menuItems.map((item) => (
+        {visibleMenuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
               selected={location.pathname === item.path}
