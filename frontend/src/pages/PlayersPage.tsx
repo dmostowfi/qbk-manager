@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -22,6 +23,7 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { usePlayers } from '../hooks/usePlayers';
+import { useAuth } from '../contexts/AuthContext';
 import { Player } from '../types';
 import { PlayerFormData } from '../services/api';
 import PlayerForm from '../components/players/PlayerForm';
@@ -49,7 +51,13 @@ export default function PlayersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
+  const { role } = useAuth();
   const { players, loading, error, updatePlayer, setFilters } = usePlayers();
+
+  // Only admin and staff can access this page
+  if (role && role !== 'admin' && role !== 'staff') {
+    return <Navigate to="/events" replace />;
+  }
 
   const handleSearch = () => {
     setFilters({ search: searchQuery });

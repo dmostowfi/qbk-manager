@@ -22,6 +22,7 @@ import EventList from '../components/events/EventList';
 import EventCalendar from '../components/events/EventCalendar';
 import EventForm from '../components/events/EventForm';
 import { useEvents } from '../hooks/useEvents';
+import { useAuth } from '../contexts/AuthContext';
 import { Event, EventFormData } from '../types';
 
 type ViewMode = 'list' | 'calendar';
@@ -79,6 +80,8 @@ export default function EventsPage() {
   const [eventToDelete, setEventToDelete] = useState<Event | null>(null);
 
   const { events, loading, error, createEvent, updateEvent, deleteEvent, refetch } = useEvents();
+  const { role } = useAuth();
+  const canEdit = role === 'admin' || role === 'staff';
 
   const filteredEvents = useMemo(() => {
     const now = new Date();
@@ -149,13 +152,15 @@ export default function EventsPage() {
               <CalendarMonth sx={{ mr: 0.5 }} /> Calendar
             </ToggleButton>
           </ToggleButtonGroup>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenForm()}
-          >
-            Add Event
-          </Button>
+          {canEdit && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenForm()}
+            >
+              Add Event
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -212,6 +217,7 @@ export default function EventsPage() {
           onEdit={handleOpenForm}
           onDelete={handleDeleteClick}
           onView={handleOpenForm}
+          canEdit={canEdit}
         />
       ) : (
         <EventCalendar
@@ -227,6 +233,7 @@ export default function EventsPage() {
         onClose={handleCloseForm}
         onSubmit={handleSubmit}
         event={selectedEvent}
+        canEdit={canEdit}
       />
 
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>

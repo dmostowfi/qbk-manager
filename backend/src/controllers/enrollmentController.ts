@@ -47,13 +47,24 @@ export const enrollmentController = {
   async unenroll(req: Request, res: Response, next: NextFunction) {
     try {
       const { id: eventId } = req.params;
-      const { enrollmentId, enrollmentIds } = req.body;
+      const authContext = req.authContext!;
 
-      // Normalize to array - accept single enrollmentId or array of enrollmentIds
-      const ids = enrollmentIds || (enrollmentId ? [enrollmentId] : []);
-
-      if (ids.length === 0) {
-        throw createError('enrollmentId or enrollmentIds is required', 400);
+      // Determine enrollment IDs based on role
+      let ids: string[];
+      if (authContext.role === 'player') {
+        // Players can only unenroll themselves - find their enrollment for this event
+        const playerEnrollment = await enrollmentService.findByPlayerAndEvent(authContext.playerId!, eventId);
+        if (!playerEnrollment) {
+          throw createError('You are not enrolled in this event', 404);
+        }
+        ids = [playerEnrollment.id];
+      } else {
+        // Staff/admin can unenroll anyone - use IDs from request body
+        const { enrollmentId, enrollmentIds } = req.body;
+        ids = enrollmentIds || (enrollmentId ? [enrollmentId] : []);
+        if (ids.length === 0) {
+          throw createError('enrollmentId or enrollmentIds is required', 400);
+        }
       }
 
       await enrollmentService.unenroll(eventId, ids);

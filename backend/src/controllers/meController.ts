@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import { getAuthUserId, getAuthPlayer } from '../utils/auth.js';
 import { createError } from '../middleware/errorHandler.js';
 import { PrismaClient } from '@prisma/client';
 
@@ -8,16 +7,30 @@ const prisma = new PrismaClient();
 export const meController = {
   async getProfile(req: Request, res: Response, next: NextFunction) {
     try {
-      const userId = getAuthUserId(req);
-      if (!userId) {
+      const authContext = req.authContext;
+      if (!authContext) {
         throw createError('Unauthorized', 401);
       }
 
-      const player = await getAuthPlayer(req);
-      if (!player) {
-        throw createError('Player not found', 404);
+      const { role, userId } = authContext;
+
+      if (role === 'admin' || role === 'staff') {
+        const staff = await prisma.staff.findUnique({
+          where: { clerkId: userId },
+        });
+        if (!staff) {
+          throw createError('Staff not found', 404);
+        }
+        res.json({ success: true, data: { ...staff, role } });
+      } else {
+        const player = await prisma.player.findUnique({
+          where: { clerkId: userId },
+        });
+        if (!player) {
+          throw createError('Player not found', 404);
+        }
+        res.json({ success: true, data: { ...player, role } });
       }
-      res.json({ success: true, data: player });
     } catch (error) {
       next(error);
     }
@@ -25,12 +38,20 @@ export const meController = {
 
   async getEnrollments(req: Request, res: Response, next: NextFunction) {
     try {
-      const userId = getAuthUserId(req);
-      if (!userId) {
+      const authContext = req.authContext;
+      if (!authContext) {
         throw createError('Unauthorized', 401);
       }
 
-      const player = await getAuthPlayer(req);
+      // Only players have enrollments
+      if (authContext.role !== 'player') {
+        res.json({ success: true, data: [] });
+        return;
+      }
+
+      const player = await prisma.player.findUnique({
+        where: { clerkId: authContext.userId },
+      });
       if (!player) {
         throw createError('Player not found', 404);
       }
