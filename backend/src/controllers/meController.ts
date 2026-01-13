@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { getAuthUserId } from '../utils/auth.js';
 import { createError } from '../middleware/errorHandler.js';
 import { PrismaClient } from '@prisma/client';
 
@@ -7,30 +8,51 @@ const prisma = new PrismaClient();
 export const meController = {
   async getProfile(req: Request, res: Response, next: NextFunction) {
     try {
-      const authContext = req.authContext;
-      if (!authContext) {
+      const clerkId = getAuthUserId(req);
+      if (!clerkId) {
         throw createError('Unauthorized', 401);
       }
 
-      const { role, userId } = authContext;
+      // Query both tables in parallel - no added latency
+      const [staff, player] = await Promise.all([
+        prisma.staff.findUnique({ where: { clerkId } }),
+        prisma.player.findUnique({ where: { clerkId } }),
+      ]);
 
-      if (role === 'admin' || role === 'staff') {
-        const staff = await prisma.staff.findUnique({
-          where: { clerkId: userId },
+      if (staff) {
+        // Staff/Admin user
+        return res.json({
+          success: true,
+          data: {
+            id: staff.id,
+            firstName: staff.firstName,
+            lastName: staff.lastName,
+            email: staff.email,
+            role: staff.role.toLowerCase(), // ADMIN -> admin, STAFF -> staff
+          },
         });
-        if (!staff) {
-          throw createError('Staff not found', 404);
-        }
-        res.json({ success: true, data: { ...staff, role } });
-      } else {
-        const player = await prisma.player.findUnique({
-          where: { clerkId: userId },
-        });
-        if (!player) {
-          throw createError('Player not found', 404);
-        }
-        res.json({ success: true, data: { ...player, role } });
       }
+
+      if (player) {
+        // Player user
+        return res.json({
+          success: true,
+          data: {
+            id: player.id,
+            firstName: player.firstName,
+            lastName: player.lastName,
+            email: player.email,
+            phone: player.phone,
+            membershipType: player.membershipType,
+            membershipStatus: player.membershipStatus,
+            classCredits: player.classCredits,
+            dropInCredits: player.dropInCredits,
+            role: 'player',
+          },
+        });
+      }
+
+      throw createError('User not found', 404);
     } catch (error) {
       next(error);
     }
