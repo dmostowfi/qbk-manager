@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getAuthUserId, getAuthPlayer } from '../utils/auth.js';
+import { getAuthUserId } from '../utils/auth.js';
 import { createError } from '../middleware/errorHandler.js';
 import { PrismaClient } from '@prisma/client';
 
@@ -8,16 +8,51 @@ const prisma = new PrismaClient();
 export const meController = {
   async getProfile(req: Request, res: Response, next: NextFunction) {
     try {
-      const userId = getAuthUserId(req);
-      if (!userId) {
+      const clerkId = getAuthUserId(req);
+      if (!clerkId) {
         throw createError('Unauthorized', 401);
       }
 
-      const player = await getAuthPlayer(req);
-      if (!player) {
-        throw createError('Player not found', 404);
+      // Query both tables in parallel - no added latency
+      const [staff, player] = await Promise.all([
+        prisma.staff.findUnique({ where: { clerkId } }),
+        prisma.player.findUnique({ where: { clerkId } }),
+      ]);
+
+      if (staff) {
+        // Staff/Admin user
+        return res.json({
+          success: true,
+          data: {
+            id: staff.id,
+            firstName: staff.firstName,
+            lastName: staff.lastName,
+            email: staff.email,
+            role: staff.role.toLowerCase(), // ADMIN -> admin, STAFF -> staff
+          },
+        });
       }
-      res.json({ success: true, data: player });
+
+      if (player) {
+        // Player user
+        return res.json({
+          success: true,
+          data: {
+            id: player.id,
+            firstName: player.firstName,
+            lastName: player.lastName,
+            email: player.email,
+            phone: player.phone,
+            membershipType: player.membershipType,
+            membershipStatus: player.membershipStatus,
+            classCredits: player.classCredits,
+            dropInCredits: player.dropInCredits,
+            role: 'player',
+          },
+        });
+      }
+
+      throw createError('User not found', 404);
     } catch (error) {
       next(error);
     }
