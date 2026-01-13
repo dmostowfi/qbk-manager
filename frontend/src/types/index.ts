@@ -4,6 +4,9 @@ export type SkillLevel = 'INTRO_I' | 'INTRO_II' | 'INTRO_III' | 'INTRO_IV' | 'IN
 export type GenderCategory = 'MENS' | 'WOMENS' | 'COED';
 export type EventStatus = 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
 
+// Role types
+export type AppRole = 'admin' | 'staff' | 'player';
+
 // Player types
 export type MembershipType = 'GOLD' | 'DROP_IN' | 'NONE';
 export type MembershipStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED';
@@ -48,6 +51,20 @@ export interface Player {
   dropInCredits: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UserProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: AppRole;
+  // Player-specific fields (optional)
+  phone?: string;
+  membershipType?: MembershipType;
+  membershipStatus?: MembershipStatus;
+  classCredits?: number;
+  dropInCredits?: number;
 }
 
 export interface Enrollment {

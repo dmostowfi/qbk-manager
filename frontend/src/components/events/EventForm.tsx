@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -15,6 +15,8 @@ import {
   Grid,
   Box,
   Divider,
+  Typography,
+  Alert,
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
@@ -22,6 +24,7 @@ import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import { Event, EventFormData, EventType, SkillLevel, GenderCategory, Enrollment, Player } from '../../types';
 import { eventsApi, enrollmentsApi } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import EnrollmentSection from './EnrollmentSection';
 import { isEventEditable } from '../../utils/eventUtils';
 
@@ -33,6 +36,7 @@ interface EventFormProps {
   onClose: () => void;
   onSubmit: (data: EventFormData) => Promise<void>;
   event?: Event | null;
+  canEdit?: boolean;
 }
 
 const eventTypes: { value: EventType; label: string }[] = [
@@ -91,13 +95,16 @@ const defaultFormData: FormData = {
   isRecurring: false,
 };
 
-export default function EventForm({ open, onClose, onSubmit, event }: EventFormProps) {
+export default function EventForm({ open, onClose, onSubmit, event, canEdit = false }: EventFormProps) {
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   const [submitting, setSubmitting] = useState(false);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [currentEnrollment, setCurrentEnrollment] = useState(0);
   const [pendingAdds, setPendingAdds] = useState<Record<string, Player>>({});
   const [pendingRemoves, setPendingRemoves] = useState<Record<string, Enrollment>>({});
+  const [enrollError, setEnrollError] = useState<string | null>(null);
+
+  const { role, userId } = useAuth();
 
   const fetchEventDetails = useCallback(async () => {
     if (event?.id) {
@@ -138,7 +145,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
     setPendingRemoves({});
   }, [event, open, fetchEventDetails]);
 
-  const editable = event ? isEventEditable(event.startTime) : true;
+  const editable = canEdit && (event ? isEventEditable(event.startTime) : true);
 
   const handleChange = (field: keyof FormData, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -165,6 +172,52 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
       const { [enrollmentId]: _, ...rest } = prev;
       return rest;
     });
+  };
+
+  // Player self-enrollment
+  const isPlayer = role === 'player';
+  const myEnrollment = useMemo(() => {
+    if (!isPlayer || !userId) return null;
+    return enrollments.find((e) => e.playerId === userId);
+  }, [isPlayer, userId, enrollments]);
+  const isEnrolled = !!myEnrollment;
+  const eventStillOpen = event ? isEventEditable(event.startTime) : false;
+  const isFull = currentEnrollment >= formData.maxCapacity;
+
+  const handleSelfEnroll = async () => {
+    if (!event?.id) return;
+    setSubmitting(true);
+    setEnrollError(null);
+    try {
+      await enrollmentsApi.enroll(event.id, []);
+      await fetchEventDetails();
+    } catch (error) {
+      if (error instanceof Error) {
+        setEnrollError(error.message);
+      } else {
+        setEnrollError('Failed to enroll');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSelfUnenroll = async () => {
+    if (!event?.id) return;
+    setSubmitting(true);
+    setEnrollError(null);
+    try {
+      await enrollmentsApi.unenroll(event.id, []);
+      await fetchEventDetails();
+    } catch (error) {
+      if (error instanceof Error) {
+        setEnrollError(error.message);
+      } else {
+        setEnrollError('Failed to unenroll');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -368,7 +421,7 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
             </Grid>
           </Grid>
 
-          {event && (
+          {event && canEdit && (
             <>
               <Divider className="my-4" />
               <EnrollmentSection
@@ -384,6 +437,59 @@ export default function EventForm({ open, onClose, onSubmit, event }: EventFormP
                 onUndoAdd={handleUndoAdd}
                 onUndoRemove={handleUndoRemove}
               />
+            </>
+          )}
+
+          {event && isPlayer && (
+            <>
+              <Divider className="my-4" />
+              <Box>
+                <Typography variant="subtitle1" className="mb-2">
+                  Enrollment
+                </Typography>
+                <Typography variant="body2" color="text.secondary" className="mb-3">
+                  {currentEnrollment}/{formData.maxCapacity} enrolled
+                </Typography>
+                {enrollError && (
+                  <Alert severity="error" className="mb-3" onClose={() => setEnrollError(null)}>
+                    {enrollError}
+                  </Alert>
+                )}
+                {isEnrolled ? (
+                  <Box>
+                    <Typography variant="body2" color="success.main" className="mb-2">
+                      You are enrolled in this event
+                      {myEnrollment?.status === 'WAITLISTED' && ' (Waitlisted)'}
+                    </Typography>
+                    {eventStillOpen && (
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={handleSelfUnenroll}
+                        disabled={submitting}
+                      >
+                        {submitting ? 'Unenrolling...' : 'Unenroll'}
+                      </Button>
+                    )}
+                  </Box>
+                ) : (
+                  <Box>
+                    {eventStillOpen ? (
+                      <Button
+                        variant="contained"
+                        onClick={handleSelfEnroll}
+                        disabled={submitting}
+                      >
+                        {submitting ? 'Enrolling...' : isFull ? 'Join Waitlist' : 'Enroll'}
+                      </Button>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Enrollment is closed for this event
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </Box>
             </>
           )}
         </Box>

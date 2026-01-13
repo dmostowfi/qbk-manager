@@ -32,6 +32,15 @@ function calculateCreditsNeeded(membershipType: string, membershipStatus: string
 
 export const enrollmentService = {
   /**
+   * Find enrollment by player and event
+   */
+  async findByPlayerAndEvent(playerId: string, eventId: string) {
+    return prisma.enrollment.findUnique({
+      where: { playerId_eventId: { playerId, eventId } },
+    });
+  },
+
+  /**
    * Enroll players in an event
    * @param eventId - Event to enroll in
    * @param playerIds - Player IDs to enroll (controller handles role-based ID selection)

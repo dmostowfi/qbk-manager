@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
+import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import EventsPage from './pages/EventsPage';
 import PlayersPage from './pages/PlayersPage';
@@ -18,14 +19,16 @@ function App() {
           element={
             <>
               <SignedIn>
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<Navigate to="/events" replace />} />
-                    <Route path="/events" element={<EventsPage />} />
-                    <Route path="/players" element={<PlayersPage />} />
-                    <Route path="/profile" element={<MyProfilePage />} />
-                  </Routes>
-                </Layout>
+                <AuthProvider>
+                  <Layout>
+                    <Routes>
+                      <Route path="/" element={<Navigate to="/profile" replace />} />
+                      <Route path="/events" element={<EventsPage />} />
+                      <Route path="/players" element={<PlayersPage />} />
+                      <Route path="/profile" element={<MyProfilePage />} />
+                    </Routes>
+                  </Layout>
+                </AuthProvider>
               </SignedIn>
               <SignedOut>
                 <RedirectToSignIn />

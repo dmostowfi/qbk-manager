@@ -25,6 +25,7 @@ app.use(cors({
     }
   },
   credentials: true,
+  exposedHeaders: ['X-User-Role'],
 }));
 app.use(express.json());
 app.use(clerkMiddleware());

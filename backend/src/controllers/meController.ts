@@ -60,12 +60,20 @@ export const meController = {
 
   async getEnrollments(req: Request, res: Response, next: NextFunction) {
     try {
-      const userId = getAuthUserId(req);
-      if (!userId) {
+      const authContext = req.authContext;
+      if (!authContext) {
         throw createError('Unauthorized', 401);
       }
 
-      const player = await getAuthPlayer(req);
+      // Only players have enrollments
+      if (authContext.role !== 'player') {
+        res.json({ success: true, data: [] });
+        return;
+      }
+
+      const player = await prisma.player.findUnique({
+        where: { clerkId: authContext.userId },
+      });
       if (!player) {
         throw createError('Player not found', 404);
       }

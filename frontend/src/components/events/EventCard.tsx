@@ -9,7 +9,7 @@ import {
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
+  AddCircle as EnrollIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { Event } from '../../types';
@@ -20,6 +20,7 @@ interface EventCardProps {
   onEdit: (event: Event) => void;
   onDelete: (event: Event) => void;
   onView: (event: Event) => void;
+  canEdit?: boolean;
 }
 
 const eventTypeColors: Record<string, 'primary' | 'secondary' | 'success' | 'warning' | 'info'> = {
@@ -46,10 +47,10 @@ const genderLabels: Record<string, string> = {
   COED: 'Co-ed',
 };
 
-export default function EventCard({ event, onEdit, onDelete, onView }: EventCardProps) {
+export default function EventCard({ event, onEdit, onDelete, onView, canEdit = false }: EventCardProps) {
   const startTime = new Date(event.startTime);
   const endTime = new Date(event.endTime);
-  const editable = isEventEditable(event.startTime);
+  const editable = canEdit && isEventEditable(event.startTime);
 
   return (
     <Card
@@ -109,9 +110,9 @@ export default function EventCard({ event, onEdit, onDelete, onView }: EventCard
             </Tooltip>
           </>
         ) : (
-          <Tooltip title="View">
-            <IconButton size="small" onClick={() => onView(event)}>
-              <ViewIcon fontSize="small" />
+          <Tooltip title="Enroll">
+            <IconButton size="small" color="primary" onClick={() => onView(event)}>
+              <EnrollIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         )}
