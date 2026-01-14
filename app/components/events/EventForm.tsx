@@ -612,7 +612,14 @@ export default function EventForm({
               <Text style={styles.enrollmentCapacity}>
                 {event?.currentEnrollment || 0} / {event?.maxCapacity || 0} spots filled
               </Text>
-              {checkingEligibility ? (
+              {isEnrolled ? (
+                <TouchableOpacity
+                  style={styles.unenrollButton}
+                  onPress={onUnenroll}
+                >
+                  <Text style={styles.unenrollButtonText}>Unenroll from Event</Text>
+                </TouchableOpacity>
+              ) : checkingEligibility ? (
                 <ActivityIndicator size="small" color={brand.colors.primary} style={{ padding: 16 }} />
               ) : eligibilityError ? (
                 <View style={styles.eligibilityErrorContainer}>
@@ -621,13 +628,6 @@ export default function EventForm({
                     You are not eligible to enroll in this event
                   </Text>
                 </View>
-              ) : isEnrolled ? (
-                <TouchableOpacity
-                  style={styles.unenrollButton}
-                  onPress={onUnenroll}
-                >
-                  <Text style={styles.unenrollButtonText}>Unenroll from Event</Text>
-                </TouchableOpacity>
               ) : (
                 <TouchableOpacity
                   style={[
