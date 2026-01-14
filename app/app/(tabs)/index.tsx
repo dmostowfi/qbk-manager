@@ -14,6 +14,7 @@ import { useFocusEffect } from 'expo-router';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { enrollmentsApi, meApi, eventsApi } from '../../shared/api/services';
 import { Event, Enrollment, EventFilters as EventFiltersType, EventFormData } from '../../shared/types';
+import { isEventEditable } from '../../shared/utils/eventUtils';
 import EventCard from '../../components/events/EventCard';
 import EventForm from '../../components/events/EventForm';
 import EventFilters from '../../components/events/EventFilters';
@@ -137,6 +138,9 @@ export default function EventsScreen() {
 
     try {
       await enrollmentsApi.enroll(event.id, [userId]);
+      // Close form and refresh data
+      setShowForm(false);
+      setEditingEvent(null);
       await fetchMyEnrollments();
       await fetchEvents();
     } catch (err: any) {
@@ -150,6 +154,9 @@ export default function EventsScreen() {
 
     try {
       await enrollmentsApi.unenroll(event.id, [enrollmentId]);
+      // Close form and refresh data
+      setShowForm(false);
+      setEditingEvent(null);
       await fetchMyEnrollments();
       await fetchEvents();
     } catch (err: any) {
@@ -169,10 +176,8 @@ export default function EventsScreen() {
   };
 
   const handleEventPress = (event: Event) => {
-    if (canEdit) {
-      setEditingEvent(event);
-      setShowForm(true);
-    }
+    setEditingEvent(event);
+    setShowForm(true);
   };
 
   const handleAddEvent = () => {
@@ -193,9 +198,7 @@ export default function EventsScreen() {
     <EventCard
       event={item}
       isEnrolled={isEnrolledInEvent(item.id)}
-      canEnroll={isPlayer}
-      onEnroll={() => handleEnroll(item)}
-      onUnenroll={() => handleUnenroll(item)}
+      canEnroll={isPlayer && isEventEditable(item.startTime)}
       onPress={() => handleEventPress(item)}
     />
   );
@@ -293,11 +296,6 @@ export default function EventsScreen() {
       ) : (
         <EventCalendar
           events={filteredAndSortedEvents}
-          isEnrolled={isEnrolledInEvent}
-          canEnroll={isPlayer}
-          canEdit={canEdit}
-          onEnroll={handleEnroll}
-          onUnenroll={handleUnenroll}
           onEventPress={handleEventPress}
         />
       )}
@@ -316,6 +314,10 @@ export default function EventsScreen() {
         event={editingEvent}
         onClose={handleCloseForm}
         onSubmit={editingEvent ? handleUpdateEvent : handleCreateEvent}
+        isEnrolled={editingEvent ? isEnrolledInEvent(editingEvent.id) : false}
+        canEnroll={isPlayer && editingEvent ? isEventEditable(editingEvent.startTime) : false}
+        onEnroll={editingEvent ? () => handleEnroll(editingEvent) : undefined}
+        onUnenroll={editingEvent ? () => handleUnenroll(editingEvent) : undefined}
       />
     </View>
   );

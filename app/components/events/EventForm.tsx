@@ -13,8 +13,8 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { Event, EventFormData, EventType, SkillLevel, GenderCategory, Player, Enrollment } from '../../shared/types';
-import { enrollmentsApi } from '../../shared/api/services';
-import { isEventEditable } from '../../shared/utils/eventUtils';
+import { enrollmentsApi, meApi } from '../../shared/api/services';
+import { isEventEditable, getEnrollmentEligibilityError } from '../../shared/utils/eventUtils';
 import EnrollmentSection from './EnrollmentSection';
 import { brand } from '../../constants/branding';
 
@@ -23,6 +23,11 @@ interface EventFormProps {
   event?: Event | null;
   onClose: () => void;
   onSubmit: (data: EventFormData) => Promise<void>;
+  // Player enrollment props
+  isEnrolled?: boolean;
+  canEnroll?: boolean;
+  onEnroll?: () => void;
+  onUnenroll?: () => void;
 }
 
 const eventTypes: { value: EventType; label: string }[] = [
@@ -49,7 +54,16 @@ const genderCategories: { value: GenderCategory; label: string }[] = [
   { value: 'WOMENS', label: "Women's" },
 ];
 
-export default function EventForm({ visible, event, onClose, onSubmit }: EventFormProps) {
+export default function EventForm({
+  visible,
+  event,
+  onClose,
+  onSubmit,
+  isEnrolled,
+  canEnroll,
+  onEnroll,
+  onUnenroll,
+}: EventFormProps) {
   // Form fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -73,12 +87,17 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
-  // Enrollment state
+  // Enrollment state (admin)
   const [pendingAdds, setPendingAdds] = useState<Record<string, Player>>({});
   const [pendingRemoves, setPendingRemoves] = useState<Record<string, Enrollment>>({});
 
+  // Player self-enrollment state
+  const [eligibilityError, setEligibilityError] = useState<string | null>(null);
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
+
   const isEditing = !!event;
-  const editable = event ? isEventEditable(event.startTime) : true;
+  // Players (canEnroll) always see read-only form; admins can edit if event hasn't started
+  const editable = !canEnroll && (event ? isEventEditable(event.startTime) : true);
   const enrollments = event?.enrollments || [];
 
   useEffect(() => {
@@ -124,8 +143,32 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
     setShowDatePicker(false);
     setShowStartTimePicker(false);
     setShowEndTimePicker(false);
+    setEligibilityError(null);
     setError('');
   }, [event, visible]);
+
+  // Fetch fresh player data for eligibility check (mirrors admin search flow)
+  useEffect(() => {
+    if (!visible || !canEnroll || !event) {
+      return;
+    }
+
+    const checkPlayerEligibility = async () => {
+      setCheckingEligibility(true);
+      try {
+        const profile = await meApi.getProfile();
+        const error = getEnrollmentEligibilityError(profile, event.eventType);
+        setEligibilityError(error);
+      } catch (err) {
+        console.error('Failed to check eligibility:', err);
+        setEligibilityError('Unable to verify eligibility');
+      } finally {
+        setCheckingEligibility(false);
+      }
+    };
+
+    checkPlayerEligibility();
+  }, [visible, canEnroll, event]);
 
   // Enrollment handlers
   const handleAddPending = (player: Player) => {
@@ -293,7 +336,7 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
         <ScrollView style={styles.form} contentContainerStyle={styles.formContentContainer}>
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {!editable && (
+          {!editable && !canEnroll && (
             <View style={styles.readOnlyBanner}>
               <Text style={styles.readOnlyText}>
                 This event can no longer be edited (15+ min past start time)
@@ -562,8 +605,50 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
             <Text style={[styles.checkboxLabel, !editable && styles.textDisabled]}>Youth Event</Text>
           </TouchableOpacity>
 
-          {/* Enrollment Section - only show when editing existing event */}
-          {isEditing && (
+          {/* Player Self-Enrollment Section */}
+          {isEditing && canEnroll && (
+            <View style={styles.playerEnrollmentSection}>
+              <Text style={styles.enrollmentTitle}>Enrollment</Text>
+              <Text style={styles.enrollmentCapacity}>
+                {event?.currentEnrollment || 0} / {event?.maxCapacity || 0} spots filled
+              </Text>
+              {checkingEligibility ? (
+                <ActivityIndicator size="small" color={brand.colors.primary} style={{ padding: 16 }} />
+              ) : eligibilityError ? (
+                <View style={styles.eligibilityErrorContainer}>
+                  <Text style={styles.eligibilityErrorText}>{eligibilityError}</Text>
+                  <Text style={styles.eligibilityErrorHint}>
+                    You are not eligible to enroll in this event
+                  </Text>
+                </View>
+              ) : isEnrolled ? (
+                <TouchableOpacity
+                  style={styles.unenrollButton}
+                  onPress={onUnenroll}
+                >
+                  <Text style={styles.unenrollButtonText}>Unenroll from Event</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.enrollButton,
+                    (event?.currentEnrollment || 0) >= (event?.maxCapacity || 0) && styles.enrollButtonDisabled,
+                  ]}
+                  onPress={onEnroll}
+                  disabled={(event?.currentEnrollment || 0) >= (event?.maxCapacity || 0)}
+                >
+                  <Text style={styles.enrollButtonText}>
+                    {(event?.currentEnrollment || 0) >= (event?.maxCapacity || 0)
+                      ? 'Event Full'
+                      : 'Enroll in Event'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Admin Enrollment Section - only show when editing existing event and user can edit */}
+          {isEditing && editable && !canEnroll && (
             <EnrollmentSection
               enrollments={enrollments}
               currentEnrollment={event?.currentEnrollment || 0}
@@ -750,5 +835,68 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '500',
+  },
+  playerEnrollmentSection: {
+    marginTop: 24,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: brand.colors.border,
+  },
+  enrollmentTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: brand.colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  enrollmentCapacity: {
+    fontSize: 14,
+    color: brand.colors.textLight,
+    marginBottom: 16,
+  },
+  enrollButton: {
+    backgroundColor: brand.colors.primary,
+    paddingVertical: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  enrollButtonDisabled: {
+    backgroundColor: brand.colors.border,
+  },
+  enrollButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  unenrollButton: {
+    backgroundColor: brand.colors.surface,
+    paddingVertical: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: brand.colors.error,
+  },
+  unenrollButtonText: {
+    color: brand.colors.error,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  eligibilityErrorContainer: {
+    backgroundColor: '#FFEBEE',
+    padding: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  eligibilityErrorText: {
+    color: brand.colors.error,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  eligibilityErrorHint: {
+    color: brand.colors.error,
+    fontSize: 13,
+    marginTop: 4,
+    opacity: 0.8,
   },
 });

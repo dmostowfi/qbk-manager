@@ -1,19 +1,21 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 import { meApi, setAuthToken } from '../shared/api/services';
-import { AppRole } from '../shared/types';
+import { AppRole, UserProfile } from '../shared/types';
 
 interface AuthContextType {
   role: AppRole | null;
   userId: string | null;
+  profile: UserProfile | null;
   loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({ role: null, userId: null, loading: true });
+const AuthContext = createContext<AuthContextType>({ role: null, userId: null, profile: null, loading: true });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const { getToken, isSignedIn } = useClerkAuth();
 
@@ -22,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isSignedIn) {
         setRole(null);
         setUserId(null);
+        setProfile(null);
         setLoading(false);
         return;
       }
@@ -31,13 +34,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const token = await getToken();
         setAuthToken(token);
 
-        const profile = await meApi.getProfile();
-        setRole(profile.role);
-        setUserId(profile.id);
+        const userProfile = await meApi.getProfile();
+        setRole(userProfile.role);
+        setUserId(userProfile.id);
+        setProfile(userProfile);
       } catch (error) {
         console.error('Failed to fetch user profile:', error);
         setRole(null);
         setUserId(null);
+        setProfile(null);
       } finally {
         setLoading(false);
       }
@@ -47,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isSignedIn, getToken]);
 
   return (
-    <AuthContext.Provider value={{ role, userId, loading }}>
+    <AuthContext.Provider value={{ role, userId, profile, loading }}>
       {children}
     </AuthContext.Provider>
   );
