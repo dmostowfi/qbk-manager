@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Player, Enrollment, EnrollmentStatus, EventType } from '../../shared/types';
 import { playersApi } from '../../shared/api/services';
+import { brand } from '../../constants/branding';
 
 interface EnrollmentSectionProps {
   enrollments: Enrollment[];
@@ -26,11 +27,11 @@ interface EnrollmentSectionProps {
 }
 
 const statusColors: Record<EnrollmentStatus, string> = {
-  REGISTERED: '#4caf50',
-  WAITLISTED: '#ff9800',
-  CANCELLED: '#f44336',
-  ATTENDED: '#2196f3',
-  NO_SHOW: '#9e9e9e',
+  REGISTERED: brand.colors.success,
+  WAITLISTED: brand.colors.warning,
+  CANCELLED: brand.colors.error,
+  ATTENDED: brand.colors.info,
+  NO_SHOW: brand.colors.textMuted,
 };
 
 // Check if a player is eligible to enroll
@@ -145,7 +146,7 @@ export default function EnrollmentSection({
         <View style={styles.enrollmentActions}>
           {isBeingRemoved ? (
             <>
-              <View style={[styles.statusChip, { backgroundColor: '#f44336' }]}>
+              <View style={[styles.statusChip, { backgroundColor: brand.colors.error }]}>
                 <Text style={styles.statusChipText}>REMOVING</Text>
               </View>
               <TouchableOpacity
@@ -189,7 +190,7 @@ export default function EnrollmentSection({
         </View>
 
         <View style={styles.enrollmentActions}>
-          <View style={[styles.statusChip, { backgroundColor: willBeWaitlisted ? '#ff9800' : '#2196f3' }]}>
+          <View style={[styles.statusChip, { backgroundColor: willBeWaitlisted ? brand.colors.warning : brand.colors.info }]}>
             <Text style={styles.statusChipText}>
               {willBeWaitlisted ? 'WILL WAITLIST' : 'PENDING'}
             </Text>
@@ -321,7 +322,7 @@ export default function EnrollmentSection({
           {showSearch && (
             <View style={styles.searchResults}>
               {searching ? (
-                <ActivityIndicator size="small" color="#1976d2" style={styles.searchLoader} />
+                <ActivityIndicator size="small" color={brand.colors.primary} style={styles.searchLoader} />
               ) : searchResults.length > 0 ? (
                 <FlatList
                   data={searchResults}
@@ -349,53 +350,56 @@ export default function EnrollmentSection({
 const styles = StyleSheet.create({
   container: {
     marginTop: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 16,
+    paddingTop: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '600',
+    color: brand.colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   countText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: brand.colors.textLight,
     fontWeight: '500',
   },
   countFull: {
-    color: '#f44336',
+    color: brand.colors.error,
   },
   unsavedBanner: {
-    backgroundColor: '#fff3e0',
-    padding: 8,
-    borderRadius: 4,
-    marginBottom: 12,
+    backgroundColor: '#FFF8E1',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
   },
   unsavedText: {
-    color: '#e65100',
+    color: '#F57C00',
     fontSize: 14,
     textAlign: 'center',
+    fontWeight: '500',
   },
   enrollmentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    padding: 14,
+    backgroundColor: brand.colors.surface,
+    borderRadius: 10,
+    marginBottom: 8,
   },
   removingRow: {
     opacity: 0.5,
-    backgroundColor: '#ffebee',
+    backgroundColor: '#FFEBEE',
   },
   pendingRow: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: brand.sidebar.activeBackground,
   },
   enrollmentInfo: {
     flex: 1,
@@ -403,15 +407,16 @@ const styles = StyleSheet.create({
   playerName: {
     fontSize: 15,
     fontWeight: '500',
+    color: brand.colors.text,
   },
   playerEmail: {
     fontSize: 13,
-    color: '#666',
+    color: brand.colors.textLight,
     marginTop: 2,
   },
   playerCredits: {
     fontSize: 12,
-    color: '#888',
+    color: brand.colors.textMuted,
     marginTop: 2,
   },
   removingText: {
@@ -423,60 +428,64 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
   statusChipText: {
     color: '#fff',
     fontSize: 11,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   removeButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   removeButtonText: {
-    color: '#f44336',
+    color: brand.colors.error,
     fontSize: 13,
+    fontWeight: '500',
   },
   undoButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   undoButtonText: {
-    color: '#1976d2',
+    color: brand.colors.primary,
     fontSize: 13,
+    fontWeight: '500',
   },
   emptyText: {
-    color: '#666',
+    color: brand.colors.textLight,
     textAlign: 'center',
-    paddingVertical: 16,
+    paddingVertical: 20,
+    fontSize: 14,
   },
   addSection: {
     marginTop: 12,
   },
   addPlayerButton: {
-    backgroundColor: '#e3f2fd',
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: brand.colors.surface,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
   },
   addPlayerButtonText: {
-    color: '#1976d2',
+    color: brand.colors.primary,
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   searchContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   searchInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: brand.colors.surface,
+    borderWidth: 0,
+    borderRadius: 10,
+    padding: 14,
     fontSize: 15,
   },
   cancelSearchButton: {
@@ -484,61 +493,64 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   cancelSearchText: {
-    color: '#666',
+    color: brand.colors.textLight,
     fontSize: 15,
+    fontWeight: '500',
   },
   searchResults: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 8,
+    marginTop: 10,
+    backgroundColor: brand.colors.surface,
+    borderRadius: 10,
     maxHeight: 250,
+    overflow: 'hidden',
   },
   searchLoader: {
-    padding: 16,
+    padding: 20,
   },
   searchResultRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: brand.colors.background,
   },
   ineligibleRow: {
-    backgroundColor: '#fafafa',
+    backgroundColor: brand.colors.background,
   },
   searchResultInfo: {
     flex: 1,
   },
   ineligibleText: {
-    color: '#999',
+    color: brand.colors.textMuted,
   },
   ineligibleChip: {
-    backgroundColor: '#ffebee',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
   ineligibleChipText: {
-    color: '#c62828',
+    color: brand.colors.error,
     fontSize: 11,
-  },
-  addText: {
-    color: '#1976d2',
-    fontSize: 14,
     fontWeight: '500',
   },
+  addText: {
+    color: brand.colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   noResultsText: {
-    color: '#666',
+    color: brand.colors.textLight,
     textAlign: 'center',
-    padding: 16,
+    padding: 20,
+    fontSize: 14,
   },
   readOnlyText: {
-    color: '#999',
+    color: brand.colors.textMuted,
     fontSize: 13,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 16,
     fontStyle: 'italic',
   },
 });

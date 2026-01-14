@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Event } from '../../shared/types';
 import dayjs from 'dayjs';
+import { brand } from '../../constants/branding';
 
 interface EventCardProps {
   event: Event;
@@ -103,7 +104,7 @@ export default function EventCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: brand.colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -122,6 +123,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
+    color: brand.colors.text,
     flex: 1,
     marginRight: 8,
   },
@@ -129,50 +131,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: brand.colors.border,
   },
-  badge_CLASS: { backgroundColor: '#e3f2fd' },
+  badge_CLASS: { backgroundColor: brand.sidebar.activeBackground },
   badge_OPEN_PLAY: { backgroundColor: '#e8f5e9' },
   badge_PRIVATE_EVENT: { backgroundColor: '#fff3e0' },
   badge_TOURNAMENT: { backgroundColor: '#fce4ec' },
   badge_LEAGUE: { backgroundColor: '#f3e5f5' },
-  badge_OTHER: { backgroundColor: '#e0e0e0' },
+  badge_OTHER: { backgroundColor: brand.colors.border },
   badgeText: {
     fontSize: 12,
     fontWeight: '500',
+    color: brand.colors.text,
   },
   details: {
     marginBottom: 12,
   },
   dateTime: {
     fontSize: 14,
-    color: '#333',
+    color: brand.colors.text,
     marginBottom: 4,
   },
   meta: {
     fontSize: 14,
-    color: '#666',
+    color: brand.colors.textLight,
     marginBottom: 2,
   },
   instructor: {
     fontSize: 14,
-    color: '#666',
+    color: brand.colors.textLight,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: brand.colors.border,
     paddingTop: 12,
   },
   capacity: {
     fontSize: 14,
-    color: '#4caf50',
+    color: brand.colors.success,
     fontWeight: '500',
   },
   capacityFull: {
-    color: '#f44336',
+    color: brand.colors.error,
   },
   actions: {
     flexDirection: 'row',
@@ -183,22 +186,22 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   enrollButton: {
-    backgroundColor: '#1976d2',
+    backgroundColor: brand.colors.primary,
   },
   unenrollButton: {
-    backgroundColor: '#fff',
+    backgroundColor: brand.colors.surface,
     borderWidth: 1,
-    borderColor: '#d32f2f',
+    borderColor: brand.colors.error,
   },
   buttonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: brand.colors.border,
   },
   enrollButtonText: {
     color: '#fff',
     fontWeight: '600',
   },
   unenrollButtonText: {
-    color: '#d32f2f',
+    color: brand.colors.error,
     fontWeight: '600',
   },
 });

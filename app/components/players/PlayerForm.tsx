@@ -13,6 +13,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { Player, MembershipType, MembershipStatus } from '../../shared/types';
 import { PlayerFormData } from '../../shared/api/services';
+import { brand } from '../../constants/branding';
 
 interface PlayerFormProps {
   visible: boolean;
@@ -60,19 +61,12 @@ export default function PlayerForm({ visible, player, onClose, onSubmit }: Playe
   }, [player, visible]);
 
   const handleSubmit = async () => {
-    if (!firstName.trim() || !lastName.trim()) {
-      setError('First and last name are required');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
     try {
+      // Only submit editable fields (name and email come from Clerk)
       const formData: Partial<PlayerFormData> = {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim(),
         phone: phone.trim() || undefined,
         membershipType,
         membershipStatus,
@@ -101,31 +95,31 @@ export default function PlayerForm({ visible, player, onClose, onSubmit }: Playe
           <Text style={styles.headerTitle}>Edit Player</Text>
           <TouchableOpacity onPress={handleSubmit} disabled={loading}>
             {loading ? (
-              <ActivityIndicator size="small" color="#1976d2" />
+              <ActivityIndicator size="small" color={brand.colors.primary} />
             ) : (
               <Text style={styles.saveButton}>Save</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
+        <ScrollView style={styles.form} contentContainerStyle={styles.formContentContainer}>
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <View style={styles.row}>
             <View style={styles.halfField}>
-              <Text style={styles.label}>First Name *</Text>
+              <Text style={styles.label}>First Name</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, styles.readOnly]}
                 value={firstName}
-                onChangeText={setFirstName}
+                editable={false}
               />
             </View>
             <View style={styles.halfField}>
-              <Text style={styles.label}>Last Name *</Text>
+              <Text style={styles.label}>Last Name</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, styles.readOnly]}
                 value={lastName}
-                onChangeText={setLastName}
+                editable={false}
               />
             </View>
           </View>
@@ -136,6 +130,8 @@ export default function PlayerForm({ visible, player, onClose, onSubmit }: Playe
             value={email}
             editable={false}
           />
+
+          <Text style={styles.helperText}>Name and email are managed by your authentication provider</Text>
 
           <Text style={styles.label}>Phone</Text>
           <TextInput
@@ -200,65 +196,96 @@ export default function PlayerForm({ visible, player, onClose, onSubmit }: Playe
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: brand.colors.surface,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: brand.colors.border,
     paddingTop: Platform.OS === 'ios' ? 60 : 16,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
+    color: brand.colors.text,
+    letterSpacing: -0.3,
   },
   cancelButton: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 15,
+    color: brand.colors.textLight,
+    fontWeight: '500',
   },
   saveButton: {
-    fontSize: 16,
-    color: '#1976d2',
+    fontSize: 15,
+    color: brand.colors.primary,
     fontWeight: '600',
   },
   form: {
     flex: 1,
+    backgroundColor: brand.colors.background,
   },
-  formContent: {
-    padding: 16,
+  formContentContainer: {
+    padding: 20,
     paddingBottom: 40,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 6,
-    color: '#333',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: brand.colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
+    backgroundColor: brand.colors.surface,
+    borderWidth: 0,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 15,
+    marginBottom: 20,
+    color: brand.colors.text,
   },
   readOnly: {
-    backgroundColor: '#f5f5f5',
-    color: '#666',
+    backgroundColor: brand.colors.background,
+    color: brand.colors.textLight,
+  },
+  helperText: {
+    fontSize: 12,
+    color: brand.colors.textMuted,
+    fontStyle: 'italic',
+    marginBottom: 20,
+    marginTop: -12,
   },
   pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    marginBottom: 16,
+    backgroundColor: brand.colors.surface,
+    borderWidth: 0,
+    borderRadius: 10,
+    marginBottom: 20,
     overflow: 'hidden',
   },
   picker: {
     height: 50,
-  },
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderWidth: 0,
+    fontSize: 15,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    color: brand.colors.text,
+    paddingHorizontal: 14,
+    outline: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    appearance: 'none',
+    width: '100%',
+    cursor: 'pointer',
+  } as any,
   row: {
     flexDirection: 'row',
     gap: 12,
@@ -267,8 +294,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   error: {
-    color: '#d32f2f',
-    marginBottom: 16,
+    color: brand.colors.error,
+    marginBottom: 20,
     textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
