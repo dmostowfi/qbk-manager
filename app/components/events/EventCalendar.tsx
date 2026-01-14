@@ -6,11 +6,6 @@ import { Event } from '../../shared/types';
 
 interface EventCalendarProps {
   events: Event[];
-  isEnrolled: (eventId: string) => boolean;
-  canEnroll: boolean;
-  canEdit: boolean;
-  onEnroll: (event: Event) => void;
-  onUnenroll: (event: Event) => void;
   onEventPress: (event: Event) => void;
 }
 
@@ -32,10 +27,7 @@ const eventTypeColors: Record<string, string> = {
   OTHER: '#607d8b',
 };
 
-export default function EventCalendar({
-  events,
-  onEventPress,
-}: EventCalendarProps) {
+export default function EventCalendar({ events, onEventPress }: EventCalendarProps) {
   const [mode, setMode] = useState<CalendarMode>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
 

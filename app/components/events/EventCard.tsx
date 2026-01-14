@@ -7,8 +7,6 @@ interface EventCardProps {
   event: Event;
   isEnrolled?: boolean;
   canEnroll?: boolean;
-  onEnroll?: () => void;
-  onUnenroll?: () => void;
   onPress?: () => void;
 }
 
@@ -34,8 +32,6 @@ export default function EventCard({
   event,
   isEnrolled,
   canEnroll,
-  onEnroll,
-  onUnenroll,
   onPress,
 }: EventCardProps) {
   const startTime = dayjs(event.startTime);
@@ -80,14 +76,14 @@ export default function EventCard({
             {isEnrolled ? (
               <TouchableOpacity
                 style={[styles.button, styles.unenrollButton]}
-                onPress={onUnenroll}
+                onPress={onPress}
               >
                 <Text style={styles.unenrollButtonText}>Unenroll</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 style={[styles.button, styles.enrollButton, isFull && styles.buttonDisabled]}
-                onPress={onEnroll}
+                onPress={onPress}
                 disabled={isFull}
               >
                 <Text style={styles.enrollButtonText}>
