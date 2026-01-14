@@ -10,11 +10,13 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { Event, EventFormData, EventType, SkillLevel, GenderCategory, Player, Enrollment } from '../../shared/types';
 import { enrollmentsApi } from '../../shared/api/services';
 import { isEventEditable } from '../../shared/utils/eventUtils';
 import EnrollmentSection from './EnrollmentSection';
+import { brand } from '../../constants/branding';
 
 interface EventFormProps {
   visible: boolean;
@@ -53,9 +55,9 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
   const [description, setDescription] = useState('');
   const [eventType, setEventType] = useState<EventType>('CLASS');
   const [courtId, setCourtId] = useState('1');
-  const [startDate, setStartDate] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  const [eventDate, setEventDate] = useState<Date>(new Date());
+  const [startTimeDate, setStartTimeDate] = useState<Date>(new Date());
+  const [endTimeDate, setEndTimeDate] = useState<Date>(new Date());
   const [maxCapacity, setMaxCapacity] = useState('12');
   const [instructor, setInstructor] = useState('');
   const [level, setLevel] = useState<SkillLevel>('INTRO_I');
@@ -65,6 +67,11 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Date/time picker visibility (for Android/web)
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   // Enrollment state
   const [pendingAdds, setPendingAdds] = useState<Record<string, Player>>({});
@@ -82,32 +89,41 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
       setCourtId(String(event.courtId));
       const start = new Date(event.startTime);
       const end = new Date(event.endTime);
-      setStartDate(start.toISOString().split('T')[0]);
-      setStartTime(start.toTimeString().slice(0, 5));
-      setEndTime(end.toTimeString().slice(0, 5));
+      setEventDate(start);
+      setStartTimeDate(start);
+      setEndTimeDate(end);
       setMaxCapacity(String(event.maxCapacity));
       setInstructor(event.instructor || '');
       setLevel(event.level);
       setGender(event.gender);
       setIsYouth(event.isYouth);
     } else {
-      // Reset form for new event
+      // Reset form for new event with sensible defaults
+      const now = new Date();
+      const defaultStart = new Date(now);
+      defaultStart.setHours(now.getHours() + 1, 0, 0, 0); // Next hour, rounded
+      const defaultEnd = new Date(defaultStart);
+      defaultEnd.setHours(defaultStart.getHours() + 1); // 1 hour duration
+
       setTitle('');
       setDescription('');
       setEventType('CLASS');
       setCourtId('1');
-      setStartDate('');
-      setStartTime('');
-      setEndTime('');
+      setEventDate(defaultStart);
+      setStartTimeDate(defaultStart);
+      setEndTimeDate(defaultEnd);
       setMaxCapacity('12');
       setInstructor('');
       setLevel('INTRO_I');
       setGender('COED');
       setIsYouth(false);
     }
-    // Reset enrollment pending states
+    // Reset enrollment pending states and picker visibility
     setPendingAdds({});
     setPendingRemoves({});
+    setShowDatePicker(false);
+    setShowStartTimePicker(false);
+    setShowEndTimePicker(false);
     setError('');
   }, [event, visible]);
 
@@ -136,13 +152,71 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
     });
   };
 
+  // Date/time picker handlers
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS
+    if (selectedDate) {
+      setEventDate(selectedDate);
+    }
+  };
+
+  const handleStartTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
+    setShowStartTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setStartTimeDate(selectedTime);
+    }
+  };
+
+  const handleEndTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
+    setShowEndTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setEndTimeDate(selectedTime);
+    }
+  };
+
+  // Format helpers
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
   const handleSubmit = async () => {
     if (!title.trim()) {
       setError('Title is required');
       return;
     }
-    if (!startDate || !startTime || !endTime) {
-      setError('Date and times are required');
+
+    // Combine date and time into full DateTime objects
+    const startDateTime = new Date(eventDate);
+    startDateTime.setHours(startTimeDate.getHours(), startTimeDate.getMinutes(), 0, 0);
+
+    const endDateTime = new Date(eventDate);
+    endDateTime.setHours(endTimeDate.getHours(), endTimeDate.getMinutes(), 0, 0);
+
+    // Validate: cannot create events in the past
+    if (!isEditing) {
+      const now = new Date();
+      if (startDateTime < now) {
+        setError('Cannot create an event in the past');
+        return;
+      }
+    }
+
+    // Validate: end time must be after start time
+    if (endDateTime <= startDateTime) {
+      setError('End time must be after start time');
       return;
     }
 
@@ -150,9 +224,6 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
     setError('');
 
     try {
-      const startDateTime = new Date(`${startDate}T${startTime}`);
-      const endDateTime = new Date(`${startDate}T${endTime}`);
-
       const formData: EventFormData = {
         title: title.trim(),
         description: description.trim() || undefined,
@@ -209,7 +280,7 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
           {editable ? (
             <TouchableOpacity onPress={handleSubmit} disabled={loading}>
               {loading ? (
-                <ActivityIndicator size="small" color="#1976d2" />
+                <ActivityIndicator size="small" color={brand.colors.primary} />
               ) : (
                 <Text style={styles.saveButton}>Save</Text>
               )}
@@ -219,7 +290,7 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
           )}
         </View>
 
-        <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
+        <ScrollView style={styles.form} contentContainerStyle={styles.formContentContainer}>
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           {!editable && (
@@ -288,34 +359,158 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
           </View>
 
           <Text style={styles.label}>Date *</Text>
-          <TextInput
-            style={[styles.input, !editable && styles.inputDisabled]}
-            value={startDate}
-            onChangeText={setStartDate}
-            placeholder="YYYY-MM-DD"
-            editable={editable}
-          />
+          {Platform.OS === 'web' ? (
+            <input
+              type="date"
+              value={eventDate.toISOString().split('T')[0]}
+              min={isEditing ? undefined : new Date().toISOString().split('T')[0]}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const [year, month, day] = e.target.value.split('-').map(Number);
+                  const newDate = new Date(eventDate);
+                  newDate.setFullYear(year, month - 1, day);
+                  setEventDate(newDate);
+                }
+              }}
+              disabled={!editable}
+              style={{
+                padding: 14,
+                fontSize: 15,
+                border: 'none',
+                borderRadius: 10,
+                marginBottom: 20,
+                backgroundColor: editable ? brand.colors.surface : brand.colors.background,
+                color: editable ? brand.colors.text : brand.colors.textMuted,
+                width: '100%',
+                boxSizing: 'border-box',
+                outline: 'none',
+              } as any}
+            />
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[styles.dateTimeButton, !editable && styles.inputDisabled]}
+                onPress={() => editable && setShowDatePicker(true)}
+                disabled={!editable}
+              >
+                <Text style={[styles.dateTimeText, !editable && styles.textDisabled]}>
+                  {formatDate(eventDate)}
+                </Text>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={eventDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                  minimumDate={isEditing ? undefined : new Date()}
+                />
+              )}
+            </>
+          )}
 
           <View style={styles.row}>
             <View style={styles.halfField}>
               <Text style={styles.label}>Start Time *</Text>
-              <TextInput
-                style={[styles.input, !editable && styles.inputDisabled]}
-                value={startTime}
-                onChangeText={setStartTime}
-                placeholder="HH:MM"
-                editable={editable}
-              />
+              {Platform.OS === 'web' ? (
+                <input
+                  type="time"
+                  value={`${String(startTimeDate.getHours()).padStart(2, '0')}:${String(startTimeDate.getMinutes()).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const [hours, minutes] = e.target.value.split(':').map(Number);
+                      const newTime = new Date(startTimeDate);
+                      newTime.setHours(hours, minutes);
+                      setStartTimeDate(newTime);
+                    }
+                  }}
+                  disabled={!editable}
+                  style={{
+                    padding: 14,
+                    fontSize: 15,
+                    border: 'none',
+                    borderRadius: 10,
+                    marginBottom: 20,
+                    backgroundColor: editable ? brand.colors.surface : brand.colors.background,
+                    color: editable ? brand.colors.text : brand.colors.textMuted,
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                  } as any}
+                />
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.dateTimeButton, !editable && styles.inputDisabled]}
+                    onPress={() => editable && setShowStartTimePicker(true)}
+                    disabled={!editable}
+                  >
+                    <Text style={[styles.dateTimeText, !editable && styles.textDisabled]}>
+                      {formatTime(startTimeDate)}
+                    </Text>
+                  </TouchableOpacity>
+                  {showStartTimePicker && (
+                    <DateTimePicker
+                      value={startTimeDate}
+                      mode="time"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={handleStartTimeChange}
+                      minuteInterval={5}
+                    />
+                  )}
+                </>
+              )}
             </View>
             <View style={styles.halfField}>
               <Text style={styles.label}>End Time *</Text>
-              <TextInput
-                style={[styles.input, !editable && styles.inputDisabled]}
-                value={endTime}
-                onChangeText={setEndTime}
-                placeholder="HH:MM"
-                editable={editable}
-              />
+              {Platform.OS === 'web' ? (
+                <input
+                  type="time"
+                  value={`${String(endTimeDate.getHours()).padStart(2, '0')}:${String(endTimeDate.getMinutes()).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const [hours, minutes] = e.target.value.split(':').map(Number);
+                      const newTime = new Date(endTimeDate);
+                      newTime.setHours(hours, minutes);
+                      setEndTimeDate(newTime);
+                    }
+                  }}
+                  disabled={!editable}
+                  style={{
+                    padding: 14,
+                    fontSize: 15,
+                    border: 'none',
+                    borderRadius: 10,
+                    marginBottom: 20,
+                    backgroundColor: editable ? brand.colors.surface : brand.colors.background,
+                    color: editable ? brand.colors.text : brand.colors.textMuted,
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                  } as any}
+                />
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.dateTimeButton, !editable && styles.inputDisabled]}
+                    onPress={() => editable && setShowEndTimePicker(true)}
+                    disabled={!editable}
+                  >
+                    <Text style={[styles.dateTimeText, !editable && styles.textDisabled]}>
+                      {formatTime(endTimeDate)}
+                    </Text>
+                  </TouchableOpacity>
+                  {showEndTimePicker && (
+                    <DateTimePicker
+                      value={endTimeDate}
+                      mode="time"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={handleEndTimeChange}
+                      minuteInterval={5}
+                    />
+                  )}
+                </>
+              )}
             </View>
           </View>
 
@@ -392,80 +587,117 @@ export default function EventForm({ visible, event, onClose, onSubmit }: EventFo
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: brand.colors.surface,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: brand.colors.border,
     paddingTop: Platform.OS === 'ios' ? 60 : 16,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
+    color: brand.colors.text,
+    letterSpacing: -0.3,
   },
   cancelButton: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 15,
+    color: brand.colors.textLight,
+    fontWeight: '500',
   },
   saveButton: {
-    fontSize: 16,
-    color: '#1976d2',
+    fontSize: 15,
+    color: brand.colors.primary,
     fontWeight: '600',
   },
   form: {
     flex: 1,
+    backgroundColor: brand.colors.background,
   },
-  formContent: {
-    padding: 16,
+  formContentContainer: {
+    padding: 20,
     paddingBottom: 40,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
   },
   readOnlyBanner: {
-    backgroundColor: '#fff3e0',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
+    backgroundColor: '#FFF8E1',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 20,
   },
   readOnlyText: {
-    color: '#e65100',
+    color: '#F57C00',
     textAlign: 'center',
     fontSize: 14,
+    fontWeight: '500',
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 6,
-    color: '#333',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: brand.colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
+    backgroundColor: brand.colors.surface,
+    borderWidth: 0,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 15,
+    marginBottom: 20,
+    color: brand.colors.text,
   },
   inputDisabled: {
-    backgroundColor: '#f5f5f5',
-    color: '#999',
+    backgroundColor: brand.colors.background,
+    color: brand.colors.textMuted,
+  },
+  dateTimeButton: {
+    backgroundColor: brand.colors.surface,
+    borderWidth: 0,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 20,
+  },
+  dateTimeText: {
+    fontSize: 15,
+    color: brand.colors.text,
   },
   textArea: {
-    height: 80,
+    height: 100,
     textAlignVertical: 'top',
+    paddingTop: 14,
   },
   pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    marginBottom: 16,
+    backgroundColor: brand.colors.surface,
+    borderWidth: 0,
+    borderRadius: 10,
+    marginBottom: 20,
     overflow: 'hidden',
   },
   picker: {
     height: 50,
-  },
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderWidth: 0,
+    fontSize: 15,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    color: brand.colors.text,
+    paddingHorizontal: 14,
+    outline: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    appearance: 'none',
+    width: '100%',
+    cursor: 'pointer',
+  } as any,
   row: {
     flexDirection: 'row',
     gap: 12,
@@ -477,37 +709,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
+    marginBottom: 20,
+    backgroundColor: brand.colors.surface,
+    padding: 14,
+    borderRadius: 10,
   },
   checkbox: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     borderWidth: 2,
-    borderColor: '#ddd',
-    borderRadius: 4,
+    borderColor: brand.colors.border,
+    borderRadius: 6,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#1976d2',
-    borderColor: '#1976d2',
+    backgroundColor: brand.colors.primary,
+    borderColor: brand.colors.primary,
   },
   checkboxDisabled: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: brand.colors.background,
   },
   checkmark: {
     color: '#fff',
     fontWeight: 'bold',
+    fontSize: 14,
   },
   checkboxLabel: {
-    fontSize: 16,
+    fontSize: 15,
+    color: brand.colors.text,
+    fontWeight: '500',
   },
   textDisabled: {
-    color: '#999',
+    color: brand.colors.textMuted,
   },
   error: {
-    color: '#d32f2f',
-    marginBottom: 16,
+    color: brand.colors.error,
+    marginBottom: 20,
     textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

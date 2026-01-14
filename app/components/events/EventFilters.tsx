@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { EventFilters as EventFiltersType, EventType, SkillLevel, GenderCategory } from '../../shared/types';
+import { brand } from '../../constants/branding';
 
 interface EventFiltersProps {
   visible: boolean;
@@ -83,7 +84,7 @@ export default function EventFilters({ visible, filters, onClose, onApply }: Eve
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content}>
+        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
           <Text style={styles.label}>Event Type</Text>
           <View style={styles.pickerContainer}>
             <Picker
@@ -137,57 +138,83 @@ export default function EventFilters({ visible, filters, onClose, onApply }: Eve
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: brand.colors.surface,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: brand.colors.border,
     paddingTop: Platform.OS === 'ios' ? 60 : 16,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
+    color: brand.colors.text,
+    letterSpacing: -0.3,
   },
   cancelButton: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 15,
+    color: brand.colors.textLight,
+    fontWeight: '500',
   },
   applyButton: {
-    fontSize: 16,
-    color: '#1976d2',
+    fontSize: 15,
+    color: brand.colors.primary,
     fontWeight: '600',
   },
   content: {
     flex: 1,
-    padding: 16,
+    backgroundColor: brand.colors.background,
+  },
+  contentContainer: {
+    padding: 20,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 6,
-    color: '#333',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: brand.colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    marginBottom: 16,
+    backgroundColor: brand.colors.surface,
+    borderWidth: 0,
+    borderRadius: 10,
+    marginBottom: 20,
     overflow: 'hidden',
   },
   picker: {
     height: 50,
-  },
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderWidth: 0,
+    fontSize: 15,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    color: brand.colors.text,
+    paddingHorizontal: 14,
+    outline: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    appearance: 'none',
+    width: '100%',
+    cursor: 'pointer',
+  } as any,
   clearButton: {
     marginTop: 16,
     padding: 16,
     alignItems: 'center',
   },
   clearButtonText: {
-    color: '#d32f2f',
-    fontSize: 16,
+    color: brand.colors.error,
+    fontSize: 15,
+    fontWeight: '500',
   },
 });

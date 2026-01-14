@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { meApi } from '../../shared/api/services';
 import { UserProfile } from '../../shared/types';
+import { brand } from '../../constants/branding';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrator',
@@ -58,7 +59,7 @@ export default function ProfileScreen() {
   if (loading || authLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#1976d2" />
+        <ActivityIndicator size="large" color={brand.colors.primary} />
       </View>
     );
   }
@@ -66,7 +67,7 @@ export default function ProfileScreen() {
   const isPlayer = role === 'player';
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
@@ -122,7 +123,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: brand.colors.background,
+  },
+  scrollContent: {
+    padding: 16,
+    maxWidth: brand.content.maxWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
   centered: {
     flex: 1,
@@ -130,16 +137,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: brand.colors.surface,
     alignItems: 'center',
     padding: 24,
     marginBottom: 16,
+    borderRadius: 12,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#1976d2',
+    backgroundColor: brand.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -152,47 +160,51 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 24,
     fontWeight: '600',
+    color: brand.colors.text,
     marginBottom: 4,
   },
   email: {
     fontSize: 16,
-    color: '#666',
+    color: brand.colors.textLight,
     marginBottom: 12,
   },
   roleBadge: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: brand.sidebar.activeBackground,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
   },
   roleText: {
-    color: '#1976d2',
+    color: brand.colors.primary,
     fontWeight: '600',
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: brand.colors.surface,
     padding: 16,
     marginBottom: 16,
+    borderRadius: 12,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
+    color: brand.colors.text,
     marginBottom: 16,
   },
   infoCard: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: brand.colors.background,
     padding: 16,
     borderRadius: 8,
     marginBottom: 12,
   },
   label: {
     fontSize: 12,
-    color: '#666',
+    color: brand.colors.textLight,
     marginBottom: 4,
   },
   value: {
     fontSize: 16,
     fontWeight: '500',
+    color: brand.colors.text,
   },
   creditsRow: {
     flexDirection: 'row',
@@ -200,7 +212,7 @@ const styles = StyleSheet.create({
   },
   creditCard: {
     flex: 1,
-    backgroundColor: '#e8f5e9',
+    backgroundColor: brand.sidebar.activeBackground,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -208,19 +220,18 @@ const styles = StyleSheet.create({
   creditValue: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#2e7d32',
+    color: brand.colors.primary,
   },
   creditLabel: {
     fontSize: 12,
-    color: '#666',
+    color: brand.colors.textLight,
     marginTop: 4,
   },
   signOutButton: {
-    backgroundColor: '#d32f2f',
+    backgroundColor: brand.colors.error,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    margin: 16,
     marginTop: 8,
   },
   signOutText: {
