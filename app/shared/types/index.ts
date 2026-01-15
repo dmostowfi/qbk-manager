@@ -110,3 +110,55 @@ export interface EventFilters {
   isYouth?: boolean;
   status?: EventStatus;
 }
+
+// Action Items
+export type ActionItemType =
+  | 'UPGRADE_MEMBERSHIP'
+  | 'RENEW_MEMBERSHIP'
+  | 'BUY_CREDITS'
+  | 'COMPLETE_PROFILE'
+  | 'BOOK_CLASS';
+
+export type ActionItemPriority = 'high' | 'medium' | 'low';
+
+export interface ActionItemAction {
+  type: 'link' | 'button';
+  label: string;
+  href?: string;
+}
+
+export interface ActionItem {
+  id: string;
+  type: ActionItemType;
+  title: string;
+  description: string;
+  priority: ActionItemPriority;
+  action?: ActionItemAction;
+}
+
+// Messages
+export type MessageType = 'info' | 'success' | 'warning';
+
+export interface Message {
+  id: string;
+  type: MessageType;
+  title: string;
+  body: string;
+  createdAt: string;
+}
+
+// Transactions
+export type TransactionType =
+  | 'MEMBERSHIP_PURCHASE'
+  | 'CREDIT_PURCHASE'
+  | 'CLASS_ENROLLMENT'
+  | 'DROP_IN'
+  | 'REFUND';
+
+export interface Transaction {
+  id: string;
+  date: string;
+  type: TransactionType;
+  description: string;
+  amount: number; // positive = charge, negative = credit/refund
+}
