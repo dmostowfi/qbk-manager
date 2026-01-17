@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Event, EventFormData, EventFilters, ApiResponse, Player, Enrollment, UserProfile } from '../types';
+import { Event, EventFormData, EventFilters, ApiResponse, Player, Enrollment, UserProfile, Product } from '../types';
 
 export interface PlayerFilters {
   membershipType?: string;
@@ -122,6 +122,18 @@ export const enrollmentsApi = {
   },
 };
 
+// Transaction type from backend
+export interface BackendTransaction {
+  id: string;
+  playerId: string;
+  stripeProductId: string;
+  productName: string | null;
+  stripeSessionId: string | null;
+  amount: string; // Decimal comes as string from Prisma
+  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+  createdAt: string;
+}
+
 // Me API (current user's own data)
 export const meApi = {
   getProfile: async (): Promise<UserProfile> => {
@@ -132,6 +144,27 @@ export const meApi = {
   getEnrollments: async (): Promise<Enrollment[]> => {
     const response = await api.get<ApiResponse<Enrollment[]>>('/me/enrollments');
     return response.data.data || [];
+  },
+
+  getTransactions: async (): Promise<BackendTransaction[]> => {
+    const response = await api.get<ApiResponse<BackendTransaction[]>>('/me/transactions');
+    return response.data.data || [];
+  },
+};
+
+// Products API (Stripe products)
+export const productsApi = {
+  getAll: async (): Promise<Product[]> => {
+    const response = await api.get<Product[]>('/products');
+    return response.data;
+  },
+};
+
+// Checkout API
+export const checkoutApi = {
+  createSession: async (priceId: string): Promise<{ url: string }> => {
+    const response = await api.post<{ url: string }>('/checkout/session', { priceId });
+    return response.data;
   },
 };
 

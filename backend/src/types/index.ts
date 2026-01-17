@@ -6,7 +6,7 @@ export type {
   Transaction,
   MembershipType,
   MembershipStatus,
-  TransactionType,
+  TransactionStatus,
   EnrollmentStatus,
   EventType,
   SkillLevel,

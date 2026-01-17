@@ -62,10 +62,13 @@ export default function TabLayout() {
 
   // Show players tab for admin/staff, hide for players
   const canViewPlayers = loading || role === 'admin' || role === 'staff';
+  // Show membership tab for players only
+  const canViewMembership = role === 'player';
 
   const navItems = [
     { icon: 'calendar' as const, label: 'Events', href: '/' },
     ...(canViewPlayers ? [{ icon: 'users' as const, label: 'Players', href: '/players' }] : []),
+    ...(canViewMembership ? [{ icon: 'credit-card' as const, label: 'Membership', href: '/membership' }] : []),
     { icon: 'user' as const, label: 'Profile', href: '/profile' },
   ];
 
