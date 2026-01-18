@@ -61,6 +61,14 @@ export interface UserProfile {
   role: AppRole;
   // Player-specific fields (optional)
   phone?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  dateOfBirth?: string;
+  tosAcceptedAt?: string;
+  privacyAcceptedAt?: string;
+  waiverSignedAt?: string;
   membershipType?: MembershipType;
   membershipStatus?: MembershipStatus;
   classCredits?: number;
@@ -113,11 +121,10 @@ export interface EventFilters {
 
 // Action Items
 export type ActionItemType =
-  | 'UPGRADE_MEMBERSHIP'
-  | 'RENEW_MEMBERSHIP'
-  | 'BUY_CREDITS'
   | 'COMPLETE_PROFILE'
-  | 'BOOK_CLASS';
+  | 'START_PLAYING'
+  | 'LOW_CLASS_CREDITS'
+  | 'LOW_DROPIN_CREDITS';
 
 export type ActionItemPriority = 'high' | 'medium' | 'low';
 
@@ -133,6 +140,7 @@ export interface ActionItem {
   title: string;
   description: string;
   priority: ActionItemPriority;
+  dismissible: boolean;
   action?: ActionItemAction;
 }
 

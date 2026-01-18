@@ -8,7 +8,9 @@ const router = Router();
 router.use(requireRole(['admin', 'staff', 'player']));
 
 router.get('/', meController.getProfile);
+router.put('/', meController.updateProfile);
 router.get('/enrollments', meController.getEnrollments);
 router.get('/transactions', meController.getTransactions);
+router.post('/sign', meController.signAgreement);
 
 export default router;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
 } from 'react-native';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { meApi, BackendTransaction } from '../../shared/api/services';
 import { UserProfile, ActionItem, Message } from '../../shared/types';
 import { brand } from '../../constants/branding';
-import { computeActionItems, getDemoMessages } from '../../shared/utils/dashboardUtils';
+import { computeActionItems, getDemoMessages, dismissActionItem } from '../../shared/utils/dashboardUtils';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrator',
@@ -36,33 +38,43 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [transactions, setTransactions] = useState<BackendTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dismissedItems, setDismissedItems] = useState<string[]>([]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [profileData, transactionsData] = await Promise.all([
-          meApi.getProfile(),
-          meApi.getTransactions(),
-        ]);
-        setProfile(profileData);
-        setTransactions(transactionsData);
-      } catch (err) {
-        console.error('Failed to fetch profile data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Fetch all profile data (profile, transactions, etc.)
+  const fetchData = useCallback(async () => {
+    if (authLoading) return;
 
-    if (!authLoading) {
-      fetchData();
+    try {
+      const [profileData, transactionsData] = await Promise.all([
+        meApi.getProfile(),
+        meApi.getTransactions(),
+      ]);
+      setProfile(profileData);
+      setTransactions(transactionsData);
+    } catch (err) {
+      console.error('Failed to fetch profile data:', err);
+    } finally {
+      setLoading(false);
     }
   }, [authLoading]);
 
-  // Compute action items from profile
+  // Refetch data whenever the screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [fetchData])
+  );
+
+  // Compute action items from profile, filtering out dismissed ones
   const actionItems = useMemo(() => {
     if (!profile) return [];
-    return computeActionItems(profile);
-  }, [profile]);
+    return computeActionItems(profile).filter(item => !dismissedItems.includes(item.id));
+  }, [profile, dismissedItems]);
+
+  const handleDismiss = (itemId: string) => {
+    dismissActionItem(itemId);
+    setDismissedItems(prev => [...prev, itemId]);
+  };
 
   // Demo messages (will be replaced with API call later)
   const messages = useMemo(() => getDemoMessages(), []);
@@ -158,6 +170,14 @@ export default function ProfileScreen() {
                       item.priority === 'medium' && styles.actionItemMedium,
                     ]}
                   >
+                    {item.dismissible && (
+                      <TouchableOpacity
+                        style={styles.dismissButton}
+                        onPress={() => handleDismiss(item.id)}
+                      >
+                        <FontAwesome name="times" size={16} color={brand.colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
                     <View style={styles.actionItemContent}>
                       <Text style={styles.actionItemTitle}>{item.title}</Text>
                       <Text style={styles.actionItemDescription}>{item.description}</Text>
@@ -442,6 +462,16 @@ const styles = StyleSheet.create({
   actionItemMedium: {
     borderLeftColor: brand.colors.warning,
     backgroundColor: '#fff8e1',
+  },
+  dismissButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   actionItemContent: {
     marginBottom: 10,
