@@ -8,26 +8,28 @@ datasource db {
 }
 
 model Player {
-  id               String           @id @default(uuid())
-  clerkId          String?          @unique
-  firstName        String
-  lastName         String
-  email            String           @unique
-  phone            String?
-  streetAddress    String?
-  city             String?
-  state            String?
-  zipCode          String?
-  dateOfBirth      DateTime?
-  membershipType   MembershipType   @default(NONE)
-  membershipStatus MembershipStatus @default(ACTIVE)
-  statusUpdatedAt  DateTime         @default(now())
-  classCredits     Int              @default(0)
-  dropInCredits    Int              @default(0)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  enrollments      Enrollment[]
-  transactions     Transaction[]
+  id                   String           @id @default(uuid())
+  clerkId              String?          @unique
+  firstName            String
+  lastName             String
+  email                String           @unique
+  phone                String?
+  streetAddress        String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  dateOfBirth          DateTime?
+  membershipType       MembershipType   @default(NONE)
+  membershipStatus     MembershipStatus @default(ACTIVE)
+  statusUpdatedAt      DateTime         @default(now())
+  classCredits         Int              @default(0)
+  dropInCredits        Int              @default(0)
+  stripeCustomerId     String?          @unique
+  stripeSubscriptionId String?          @unique
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  enrollments          Enrollment[]
+  transactions         Transaction[]
 }
 
 model Staff {
@@ -75,14 +77,15 @@ model Enrollment {
 }
 
 model Transaction {
-  id              String          @id @default(uuid())
+  id              String            @id @default(uuid())
   playerId        String
-  transactionType TransactionType
-  amount          Decimal         @db.Decimal(10, 2)
-  classCredits    Int             @default(0)
-  dropInCredits   Int             @default(0)
-  createdAt       DateTime        @default(now())
-  player          Player          @relation(fields: [playerId], references: [id])
+  stripeProductId String
+  productName     String?
+  stripeSessionId String?           @unique
+  amount          Decimal           @db.Decimal(10, 2)
+  status          TransactionStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+  player          Player            @relation(fields: [playerId], references: [id])
 }
 
 enum StaffRole {
@@ -102,12 +105,11 @@ enum MembershipStatus {
   CANCELLED
 }
 
-enum TransactionType {
-  MEMBERSHIP_GOLD
-  MEMBERSHIP_DROPIN
-  CLASS_PACK
-  SINGLE_CLASS
-  SINGLE_DROP_IN
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }
 
 enum EnrollmentStatus {

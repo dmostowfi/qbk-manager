@@ -89,6 +89,40 @@ export const meController = {
       next(error);
     }
   },
+
+  async getTransactions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authContext = req.authContext;
+      if (!authContext) {
+        throw createError('Unauthorized', 401);
+      }
+
+      // Only players have transactions
+      if (authContext.role !== 'player') {
+        res.json({ success: true, data: [] });
+        return;
+      }
+
+      const player = await prisma.player.findUnique({
+        where: { clerkId: authContext.userId },
+      });
+      if (!player) {
+        throw createError('Player not found', 404);
+      }
+
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          playerId: player.id,
+          status: 'COMPLETED',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      res.json({ success: true, data: transactions });
+    } catch (error) {
+      next(error);
+    }
+  },
 };
 
 export default meController;

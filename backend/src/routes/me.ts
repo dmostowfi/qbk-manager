@@ -9,5 +9,6 @@ router.use(requireRole(['admin', 'staff', 'player']));
 
 router.get('/', meController.getProfile);
 router.get('/enrollments', meController.getEnrollments);
+router.get('/transactions', meController.getTransactions);
 
 export default router;

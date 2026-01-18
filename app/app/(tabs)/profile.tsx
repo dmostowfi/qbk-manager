@@ -10,10 +10,10 @@ import {
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import { useAppAuth } from '../../contexts/AuthContext';
-import { meApi } from '../../shared/api/services';
-import { UserProfile, ActionItem, Message, Transaction } from '../../shared/types';
+import { meApi, BackendTransaction } from '../../shared/api/services';
+import { UserProfile, ActionItem, Message } from '../../shared/types';
 import { brand } from '../../constants/branding';
-import { computeActionItems, getDemoMessages, getDemoTransactions } from '../../shared/utils/dashboardUtils';
+import { computeActionItems, getDemoMessages } from '../../shared/utils/dashboardUtils';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrator',
@@ -27,13 +27,6 @@ const membershipLabels: Record<string, string> = {
   NONE: 'No Membership',
 };
 
-const transactionTypeLabels: Record<string, string> = {
-  MEMBERSHIP_PURCHASE: 'Membership',
-  CREDIT_PURCHASE: 'Purchase',
-  CLASS_ENROLLMENT: 'Class',
-  DROP_IN: 'Drop-in',
-  REFUND: 'Refund',
-};
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
@@ -41,22 +34,27 @@ export default function ProfileScreen() {
   const { role, loading: authLoading } = useAppAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [transactions, setTransactions] = useState<BackendTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       try {
-        const data = await meApi.getProfile();
-        setProfile(data);
+        const [profileData, transactionsData] = await Promise.all([
+          meApi.getProfile(),
+          meApi.getTransactions(),
+        ]);
+        setProfile(profileData);
+        setTransactions(transactionsData);
       } catch (err) {
-        console.error('Failed to fetch profile:', err);
+        console.error('Failed to fetch profile data:', err);
       } finally {
         setLoading(false);
       }
     };
 
     if (!authLoading) {
-      fetchProfile();
+      fetchData();
     }
   }, [authLoading]);
 
@@ -68,9 +66,6 @@ export default function ProfileScreen() {
 
   // Demo messages (will be replaced with API call later)
   const messages = useMemo(() => getDemoMessages(), []);
-
-  // Demo transactions (will be replaced with API call later)
-  const transactions = useMemo(() => getDemoTransactions(), []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -168,7 +163,10 @@ export default function ProfileScreen() {
                       <Text style={styles.actionItemDescription}>{item.description}</Text>
                     </View>
                     {item.action && (
-                      <TouchableOpacity style={styles.actionItemButton}>
+                      <TouchableOpacity
+                        style={styles.actionItemButton}
+                        onPress={() => item.action?.href && router.push(item.action.href as any)}
+                      >
                         <Text style={styles.actionItemButtonText}>{item.action.label}</Text>
                       </TouchableOpacity>
                     )}
@@ -215,9 +213,8 @@ export default function ProfileScreen() {
             {/* Header Row */}
             <View style={styles.ledgerHeader}>
               <Text style={[styles.ledgerHeaderCell, styles.ledgerDateCol]}>Date</Text>
-              <Text style={[styles.ledgerHeaderCell, styles.ledgerIdCol]}>ID</Text>
-              <Text style={[styles.ledgerHeaderCell, styles.ledgerTypeCol]}>Type</Text>
-              <Text style={[styles.ledgerHeaderCell, styles.ledgerDescCol]}>Description</Text>
+              <Text style={[styles.ledgerHeaderCell, styles.ledgerConfirmCol]}>Confirmation #</Text>
+              <Text style={[styles.ledgerHeaderCell, styles.ledgerProductCol]}>Product</Text>
               <Text style={[styles.ledgerHeaderCell, styles.ledgerAmountCol]}>Amount</Text>
             </View>
             {/* Data Rows or Empty State */}
@@ -226,36 +223,33 @@ export default function ProfileScreen() {
                 <Text style={styles.ledgerEmptyText}>No transactions at this time</Text>
               </View>
             ) : (
-              transactions.map((txn, index) => (
-                <View
-                  key={txn.id}
-                  style={[
-                    styles.ledgerRow,
-                    index % 2 === 0 && styles.ledgerRowEven,
-                  ]}
-                >
-                  <Text style={[styles.ledgerCell, styles.ledgerDateCol]}>
-                    {new Date(txn.date).toLocaleDateString()}
-                  </Text>
-                  <Text style={[styles.ledgerCell, styles.ledgerIdCol, styles.ledgerIdText]}>
-                    {txn.id}
-                  </Text>
-                  <Text style={[styles.ledgerCell, styles.ledgerTypeCol]}>
-                    {transactionTypeLabels[txn.type] || txn.type}
-                  </Text>
-                  <Text style={[styles.ledgerCell, styles.ledgerDescCol]}>
-                    {txn.description}
-                  </Text>
-                  <Text style={[
-                    styles.ledgerCell,
-                    styles.ledgerAmountCol,
-                    txn.amount > 0 && styles.ledgerAmountCharge,
-                    txn.amount < 0 && styles.ledgerAmountCredit,
-                  ]}>
-                    {txn.amount === 0 ? '-' : txn.amount > 0 ? `$${txn.amount.toFixed(2)}` : `-$${Math.abs(txn.amount).toFixed(2)}`}
-                  </Text>
-                </View>
-              ))
+              transactions.map((txn, index) => {
+                const amount = parseFloat(txn.amount);
+                // Extract last 8 chars of session ID for display
+                const confirmNum = txn.stripeSessionId?.slice(-8) || '—';
+                return (
+                  <View
+                    key={txn.id}
+                    style={[
+                      styles.ledgerRow,
+                      index % 2 === 0 && styles.ledgerRowEven,
+                    ]}
+                  >
+                    <Text style={[styles.ledgerCell, styles.ledgerDateCol]}>
+                      {new Date(txn.createdAt).toLocaleDateString()}
+                    </Text>
+                    <Text style={[styles.ledgerCell, styles.ledgerConfirmCol, styles.ledgerConfirmText]}>
+                      {confirmNum}
+                    </Text>
+                    <Text style={[styles.ledgerCell, styles.ledgerProductCol]}>
+                      {txn.productName || 'Unknown Product'}
+                    </Text>
+                    <Text style={[styles.ledgerCell, styles.ledgerAmountCol, styles.ledgerAmountCharge]}>
+                      ${amount.toFixed(2)}
+                    </Text>
+                  </View>
+                );
+              })
             )}
           </View>
         </View>
@@ -569,20 +563,17 @@ const styles = StyleSheet.create({
     color: brand.colors.text,
   },
   ledgerDateCol: {
-    width: 90,
+    width: 100,
   },
-  ledgerIdCol: {
-    width: 120,
+  ledgerConfirmCol: {
+    width: 130,
   },
-  ledgerIdText: {
+  ledgerConfirmText: {
     fontFamily: 'monospace',
-    fontSize: 11,
+    fontSize: 12,
     color: brand.colors.textMuted,
   },
-  ledgerTypeCol: {
-    width: 80,
-  },
-  ledgerDescCol: {
+  ledgerProductCol: {
     flex: 1,
   },
   ledgerAmountCol: {
@@ -591,10 +582,6 @@ const styles = StyleSheet.create({
   },
   ledgerAmountCharge: {
     color: brand.colors.text,
-    fontWeight: '500',
-  },
-  ledgerAmountCredit: {
-    color: brand.colors.success,
     fontWeight: '500',
   },
   ledgerEmptyRow: {

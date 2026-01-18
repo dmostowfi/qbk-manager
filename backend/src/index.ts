@@ -27,6 +27,11 @@ app.use(cors({
   credentials: true,
   exposedHeaders: ['X-User-Role'],
 }));
+
+// Use raw body for Stripe webhooks (needed for signature verification)
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
+
+// Use JSON for everything else
 app.use(express.json());
 app.use(clerkMiddleware());
 

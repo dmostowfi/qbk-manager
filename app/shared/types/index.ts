@@ -162,3 +162,26 @@ export interface Transaction {
   description: string;
   amount: number; // positive = charge, negative = credit/refund
 }
+
+// Products (from Stripe)
+export interface ProductPrice {
+  id: string;
+  unitAmount: number | null;
+  currency: string;
+  recurring: {
+    interval: 'month' | 'year';
+    interval_count: number;
+  } | null;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  metadata: {
+    membershipType?: string;
+    classCredits?: string;
+    dropInCredits?: string;
+  };
+  price: ProductPrice | null;
+}

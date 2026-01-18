@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { Webhook } from 'svix';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, MembershipType } from '@prisma/client';
+import Stripe from 'stripe';
+import { stripeService } from '../services/stripeService.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -140,5 +142,193 @@ router.post('/clerk', async (req: Request, res: Response) => {
   // Return 200 for unhandled events (Clerk expects this)
   return res.status(200).json({ success: true, message: `Unhandled event: ${eventType}` });
 });
+
+/**
+ * POST /api/webhooks/stripe
+ * Handle Stripe webhook events
+ */
+router.post('/stripe', async (req: Request, res: Response) => {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error('STRIPE_WEBHOOK_SECRET not set');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
+
+  const signature = req.headers['stripe-signature'] as string;
+
+  if (!signature) {
+    return res.status(400).json({ error: 'Missing stripe-signature header' });
+  }
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripeService.constructWebhookEvent(req.body, signature, webhookSecret);
+  } catch (err) {
+    console.error('Stripe webhook signature verification failed:', err);
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      await handleCheckoutCompleted(session);
+      break;
+    }
+
+    case 'checkout.session.expired': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      await handleCheckoutExpired(session);
+      break;
+    }
+
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object as Stripe.Subscription;
+      await handleSubscriptionDeleted(subscription);
+      break;
+    }
+
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice;
+      console.log('Invoice payment failed:', invoice.id);
+      // Could implement retry logic or notifications here
+      break;
+    }
+
+    default:
+      console.log(`Unhandled Stripe event type: ${event.type}`);
+  }
+
+  return res.status(200).json({ received: true });
+});
+
+/**
+ * Handle successful checkout - apply product effects to player
+ */
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const sessionId = session.id;
+  const playerId = session.metadata?.playerId;
+
+  if (!playerId) {
+    console.error('No playerId in checkout session metadata:', sessionId);
+    return;
+  }
+
+  // Find the pending transaction
+  const transaction = await prisma.transaction.findUnique({
+    where: { stripeSessionId: sessionId },
+  });
+
+  if (!transaction) {
+    console.error('No transaction found for session:', sessionId);
+    return;
+  }
+
+  if (transaction.status === 'COMPLETED') {
+    console.log('Transaction already completed:', sessionId);
+    return;
+  }
+
+  try {
+    // Retrieve the full session with line items to get product info
+    const fullSession = await stripeService.retrieveCheckoutSession(sessionId);
+    const lineItem = fullSession.line_items?.data[0];
+
+    if (!lineItem) {
+      console.error('No line items in checkout session:', sessionId);
+      return;
+    }
+
+    const product = lineItem.price?.product as Stripe.Product;
+    const metadata = product.metadata;
+
+    console.log('Processing checkout for product:', product.name, 'metadata:', metadata);
+
+    // Apply effects based on metadata
+    const updates: any = {};
+
+    if (metadata.membershipType) {
+      updates.membershipType = metadata.membershipType as MembershipType;
+      updates.membershipStatus = 'ACTIVE';
+      updates.statusUpdatedAt = new Date();
+
+      // Store subscription ID if this is a subscription
+      if (session.subscription) {
+        updates.stripeSubscriptionId = session.subscription as string;
+      }
+    }
+
+    if (metadata.classCredits) {
+      updates.classCredits = {
+        increment: parseInt(metadata.classCredits, 10),
+      };
+    }
+
+    if (metadata.dropInCredits) {
+      updates.dropInCredits = {
+        increment: parseInt(metadata.dropInCredits, 10),
+      };
+    }
+
+    // Update player with effects
+    if (Object.keys(updates).length > 0) {
+      await prisma.player.update({
+        where: { id: playerId },
+        data: updates,
+      });
+      console.log('Applied effects to player:', playerId, updates);
+    }
+
+    // Mark transaction as completed
+    await prisma.transaction.update({
+      where: { id: transaction.id },
+      data: { status: 'COMPLETED' },
+    });
+
+    console.log('Checkout completed successfully:', sessionId);
+  } catch (error) {
+    console.error('Error processing checkout completion:', error);
+  }
+}
+
+/**
+ * Handle expired checkout - mark transaction as failed
+ */
+async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
+  const transaction = await prisma.transaction.findUnique({
+    where: { stripeSessionId: session.id },
+  });
+
+  if (transaction && transaction.status === 'PENDING') {
+    await prisma.transaction.update({
+      where: { id: transaction.id },
+      data: { status: 'FAILED' },
+    });
+    console.log('Checkout expired, marked as failed:', session.id);
+  }
+}
+
+/**
+ * Handle subscription cancellation - update player membership status
+ */
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const player = await prisma.player.findFirst({
+    where: { stripeSubscriptionId: subscription.id },
+  });
+
+  if (player) {
+    await prisma.player.update({
+      where: { id: player.id },
+      data: {
+        membershipStatus: 'CANCELLED',
+        statusUpdatedAt: new Date(),
+        stripeSubscriptionId: null,
+      },
+    });
+    console.log('Subscription cancelled for player:', player.id);
+  }
+}
 
 export default router;
