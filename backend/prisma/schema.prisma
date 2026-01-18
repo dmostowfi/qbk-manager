@@ -19,6 +19,9 @@ model Player {
   state                String?
   zipCode              String?
   dateOfBirth          DateTime?
+  tosAcceptedAt        DateTime?
+  privacyAcceptedAt    DateTime?
+  waiverSignedAt       DateTime?
   membershipType       MembershipType   @default(NONE)
   membershipStatus     MembershipStatus @default(ACTIVE)
   statusUpdatedAt      DateTime         @default(now())

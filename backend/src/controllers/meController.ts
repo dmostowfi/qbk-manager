@@ -43,6 +43,14 @@ export const meController = {
             lastName: player.lastName,
             email: player.email,
             phone: player.phone,
+            streetAddress: player.streetAddress,
+            city: player.city,
+            state: player.state,
+            zipCode: player.zipCode,
+            dateOfBirth: player.dateOfBirth,
+            tosAcceptedAt: player.tosAcceptedAt,
+            privacyAcceptedAt: player.privacyAcceptedAt,
+            waiverSignedAt: player.waiverSignedAt,
             membershipType: player.membershipType,
             membershipStatus: player.membershipStatus,
             classCredits: player.classCredits,
@@ -119,6 +127,120 @@ export const meController = {
       });
 
       res.json({ success: true, data: transactions });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async updateProfile(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authContext = req.authContext;
+      if (!authContext) {
+        throw createError('Unauthorized', 401);
+      }
+
+      if (authContext.role !== 'player') {
+        throw createError('Only players can update their profile', 403);
+      }
+
+      const player = await prisma.player.findUnique({
+        where: { clerkId: authContext.userId },
+      });
+      if (!player) {
+        throw createError('Player not found', 404);
+      }
+
+      // Only allow updating contact info fields (not membership/credits)
+      const { phone, streetAddress, city, state, zipCode, dateOfBirth } = req.body;
+
+      const updatedPlayer = await prisma.player.update({
+        where: { id: player.id },
+        data: {
+          phone: phone !== undefined ? phone : player.phone,
+          streetAddress: streetAddress !== undefined ? streetAddress : player.streetAddress,
+          city: city !== undefined ? city : player.city,
+          state: state !== undefined ? state : player.state,
+          zipCode: zipCode !== undefined ? zipCode : player.zipCode,
+          dateOfBirth: dateOfBirth !== undefined ? dateOfBirth : player.dateOfBirth,
+        },
+      });
+
+      res.json({
+        success: true,
+        data: {
+          id: updatedPlayer.id,
+          firstName: updatedPlayer.firstName,
+          lastName: updatedPlayer.lastName,
+          email: updatedPlayer.email,
+          phone: updatedPlayer.phone,
+          streetAddress: updatedPlayer.streetAddress,
+          city: updatedPlayer.city,
+          state: updatedPlayer.state,
+          zipCode: updatedPlayer.zipCode,
+          dateOfBirth: updatedPlayer.dateOfBirth,
+          tosAcceptedAt: updatedPlayer.tosAcceptedAt,
+          privacyAcceptedAt: updatedPlayer.privacyAcceptedAt,
+          waiverSignedAt: updatedPlayer.waiverSignedAt,
+          membershipType: updatedPlayer.membershipType,
+          membershipStatus: updatedPlayer.membershipStatus,
+          classCredits: updatedPlayer.classCredits,
+          dropInCredits: updatedPlayer.dropInCredits,
+          role: 'player',
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async signAgreement(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authContext = req.authContext;
+      if (!authContext) {
+        throw createError('Unauthorized', 401);
+      }
+
+      if (authContext.role !== 'player') {
+        throw createError('Only players can sign agreements', 403);
+      }
+
+      const { agreementType } = req.body;
+      const validTypes = ['tos', 'privacy', 'waiver'];
+
+      if (!agreementType || !validTypes.includes(agreementType)) {
+        throw createError('Invalid agreement type. Must be: tos, privacy, or waiver', 400);
+      }
+
+      const player = await prisma.player.findUnique({
+        where: { clerkId: authContext.userId },
+      });
+      if (!player) {
+        throw createError('Player not found', 404);
+      }
+
+      // Map agreement type to field name
+      const fieldMap: Record<string, string> = {
+        tos: 'tosAcceptedAt',
+        privacy: 'privacyAcceptedAt',
+        waiver: 'waiverSignedAt',
+      };
+
+      const fieldName = fieldMap[agreementType];
+      const now = new Date();
+
+      // Update the appropriate field
+      const updatedPlayer = await prisma.player.update({
+        where: { id: player.id },
+        data: { [fieldName]: now },
+      });
+
+      res.json({
+        success: true,
+        data: {
+          agreementType,
+          signedAt: now,
+        },
+      });
     } catch (error) {
       next(error);
     }

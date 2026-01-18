@@ -134,10 +134,28 @@ export interface BackendTransaction {
   createdAt: string;
 }
 
+// Agreement types
+export type AgreementType = 'tos' | 'privacy' | 'waiver';
+
+// Profile update data (player-editable fields only)
+export interface ProfileUpdateData {
+  phone?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  dateOfBirth?: string;
+}
+
 // Me API (current user's own data)
 export const meApi = {
   getProfile: async (): Promise<UserProfile> => {
     const response = await api.get<ApiResponse<UserProfile>>('/me');
+    return response.data.data!;
+  },
+
+  updateProfile: async (data: ProfileUpdateData): Promise<UserProfile> => {
+    const response = await api.put<ApiResponse<UserProfile>>('/me', data);
     return response.data.data!;
   },
 
@@ -149,6 +167,11 @@ export const meApi = {
   getTransactions: async (): Promise<BackendTransaction[]> => {
     const response = await api.get<ApiResponse<BackendTransaction[]>>('/me/transactions');
     return response.data.data || [];
+  },
+
+  signAgreement: async (agreementType: AgreementType): Promise<{ agreementType: string; signedAt: string }> => {
+    const response = await api.post<ApiResponse<{ agreementType: string; signedAt: string }>>('/me/sign', { agreementType });
+    return response.data.data!;
   },
 };
 
