@@ -49,6 +49,7 @@ export interface Player {
   statusUpdatedAt: string;
   classCredits: number;
   dropInCredits: number;
+  profileCompletedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -15,6 +15,7 @@ interface PlayerEligibility {
   membershipStatus?: MembershipStatus;
   classCredits?: number;
   dropInCredits?: number;
+  profileCompletedAt?: string;
 }
 
 /**
@@ -25,6 +26,11 @@ export function getEnrollmentEligibilityError(
   player: PlayerEligibility,
   eventType: EventType
 ): string | null {
+  // Check profile completion first
+  if (!player.profileCompletedAt) {
+    return 'Incomplete profile';
+  }
+
   const isActive = player.membershipStatus === 'ACTIVE';
 
   // GOLD + ACTIVE: unlimited everything
