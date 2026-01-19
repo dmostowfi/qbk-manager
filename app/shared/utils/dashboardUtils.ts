@@ -11,20 +11,10 @@ const DISMISS_KEYS = {
 const UPSELL_COOLDOWN_MS = 60 * 24 * 60 * 60 * 1000;
 
 /**
- * Check if a profile is complete (all required fields filled)
+ * Check if a profile is complete (profileCompletedAt is set by backend)
  */
 function isProfileComplete(profile: UserProfile): boolean {
-  return !!(
-    profile.phone &&
-    profile.streetAddress &&
-    profile.city &&
-    profile.state &&
-    profile.zipCode &&
-    profile.dateOfBirth &&
-    profile.tosAcceptedAt &&
-    profile.privacyAcceptedAt &&
-    profile.waiverSignedAt
-  );
+  return !!profile.profileCompletedAt;
 }
 
 /**

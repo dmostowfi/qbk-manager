@@ -69,6 +69,7 @@ export interface UserProfile {
   tosAcceptedAt?: string;
   privacyAcceptedAt?: string;
   waiverSignedAt?: string;
+  profileCompletedAt?: string;
   membershipType?: MembershipType;
   membershipStatus?: MembershipStatus;
   classCredits?: number;

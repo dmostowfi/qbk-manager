@@ -1,9 +1,35 @@
 import { Request, Response, NextFunction } from 'express';
 import { getAuthUserId } from '../utils/auth.js';
 import { createError } from '../middleware/errorHandler.js';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Player } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+// Check if all required profile fields are filled
+function isProfileComplete(player: Player): boolean {
+  return !!(
+    player.phone &&
+    player.streetAddress &&
+    player.city &&
+    player.state &&
+    player.zipCode &&
+    player.dateOfBirth &&
+    player.tosAcceptedAt &&
+    player.privacyAcceptedAt &&
+    player.waiverSignedAt
+  );
+}
+
+// Auto-set profileCompletedAt if profile is now complete
+async function checkAndSetProfileComplete(player: Player): Promise<Player> {
+  if (!player.profileCompletedAt && isProfileComplete(player)) {
+    return prisma.player.update({
+      where: { id: player.id },
+      data: { profileCompletedAt: new Date() },
+    });
+  }
+  return player;
+}
 
 export const meController = {
   async getProfile(req: Request, res: Response, next: NextFunction) {
@@ -51,6 +77,7 @@ export const meController = {
             tosAcceptedAt: player.tosAcceptedAt,
             privacyAcceptedAt: player.privacyAcceptedAt,
             waiverSignedAt: player.waiverSignedAt,
+            profileCompletedAt: player.profileCompletedAt,
             membershipType: player.membershipType,
             membershipStatus: player.membershipStatus,
             classCredits: player.classCredits,
@@ -153,7 +180,7 @@ export const meController = {
       // Only allow updating contact info fields (not membership/credits)
       const { phone, streetAddress, city, state, zipCode, dateOfBirth } = req.body;
 
-      const updatedPlayer = await prisma.player.update({
+      let updatedPlayer = await prisma.player.update({
         where: { id: player.id },
         data: {
           phone: phone !== undefined ? phone : player.phone,
@@ -164,6 +191,9 @@ export const meController = {
           dateOfBirth: dateOfBirth !== undefined ? dateOfBirth : player.dateOfBirth,
         },
       });
+
+      // Auto-set profileCompletedAt if profile is now complete
+      updatedPlayer = await checkAndSetProfileComplete(updatedPlayer);
 
       res.json({
         success: true,
@@ -181,6 +211,7 @@ export const meController = {
           tosAcceptedAt: updatedPlayer.tosAcceptedAt,
           privacyAcceptedAt: updatedPlayer.privacyAcceptedAt,
           waiverSignedAt: updatedPlayer.waiverSignedAt,
+          profileCompletedAt: updatedPlayer.profileCompletedAt,
           membershipType: updatedPlayer.membershipType,
           membershipStatus: updatedPlayer.membershipStatus,
           classCredits: updatedPlayer.classCredits,
@@ -229,16 +260,20 @@ export const meController = {
       const now = new Date();
 
       // Update the appropriate field
-      const updatedPlayer = await prisma.player.update({
+      let updatedPlayer = await prisma.player.update({
         where: { id: player.id },
         data: { [fieldName]: now },
       });
+
+      // Auto-set profileCompletedAt if profile is now complete
+      updatedPlayer = await checkAndSetProfileComplete(updatedPlayer);
 
       res.json({
         success: true,
         data: {
           agreementType,
           signedAt: now,
+          profileCompletedAt: updatedPlayer.profileCompletedAt,
         },
       });
     } catch (error) {

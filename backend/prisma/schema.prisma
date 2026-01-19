@@ -22,6 +22,7 @@ model Player {
   tosAcceptedAt        DateTime?
   privacyAcceptedAt    DateTime?
   waiverSignedAt       DateTime?
+  profileCompletedAt   DateTime?        // Set when all required fields are filled
   membershipType       MembershipType   @default(NONE)
   membershipStatus     MembershipStatus @default(ACTIVE)
   statusUpdatedAt      DateTime         @default(now())

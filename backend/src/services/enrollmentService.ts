@@ -69,6 +69,11 @@ export const enrollmentService = {
           throw new Error(`Player ${playerId} not found`);
         }
 
+        // Check player profile is complete
+        if (!player.profileCompletedAt) {
+          throw new Error(`Player ${player.email} must complete their profile before enrolling`);
+        }
+
         // Check player isn't already enrolled
         const existingEnrollment = await tx.enrollment.findUnique({
           where: { playerId_eventId: { playerId, eventId } },
