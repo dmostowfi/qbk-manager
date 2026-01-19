@@ -11,20 +11,10 @@ const DISMISS_KEYS = {
 const UPSELL_COOLDOWN_MS = 60 * 24 * 60 * 60 * 1000;
 
 /**
- * Check if a profile is complete (all required fields filled)
+ * Check if a profile is complete (profileCompletedAt is set by backend)
  */
 function isProfileComplete(profile: UserProfile): boolean {
-  return !!(
-    profile.phone &&
-    profile.streetAddress &&
-    profile.city &&
-    profile.state &&
-    profile.zipCode &&
-    profile.dateOfBirth &&
-    profile.tosAcceptedAt &&
-    profile.privacyAcceptedAt &&
-    profile.waiverSignedAt
-  );
+  return !!profile.profileCompletedAt;
 }
 
 /**
@@ -93,10 +83,13 @@ export function clearDismiss(itemId: string): void {
  * Compute action items based on player profile state.
  * Returns up to 3 action items:
  * 1. Complete Profile (not dismissible, blocks enrollment)
- * 2. Start Playing (dismissible, for new players with no credits/membership)
+ * 2. Start Playing (dismissible, for brand new players with no transaction history)
  * 3. Low Credits Upsell (dismissible, 60-day cooldown)
+ *
+ * @param profile - The player's profile data
+ * @param hasTransactions - Whether the player has any completed transactions
  */
-export function computeActionItems(profile: UserProfile): ActionItem[] {
+export function computeActionItems(profile: UserProfile, hasTransactions: boolean = false): ActionItem[] {
   const items: ActionItem[] = [];
 
   // Only compute for players
@@ -127,8 +120,8 @@ export function computeActionItems(profile: UserProfile): ActionItem[] {
   }
 
   // 2. Start Playing (Priority: High, Dismissible)
-  // Only for brand new players with no credits AND no membership
-  if (hasNoMembership && hasNoCredits) {
+  // Only for brand new players with no credits, no membership, AND no transaction history
+  if (hasNoMembership && hasNoCredits && !hasTransactions) {
     const isDismissed = isDismissedRecently(DISMISS_KEYS.startPlaying);
     if (!isDismissed) {
       items.push({

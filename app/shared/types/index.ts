@@ -49,6 +49,7 @@ export interface Player {
   statusUpdatedAt: string;
   classCredits: number;
   dropInCredits: number;
+  profileCompletedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -69,6 +70,7 @@ export interface UserProfile {
   tosAcceptedAt?: string;
   privacyAcceptedAt?: string;
   waiverSignedAt?: string;
+  profileCompletedAt?: string;
   membershipType?: MembershipType;
   membershipStatus?: MembershipStatus;
   classCredits?: number;

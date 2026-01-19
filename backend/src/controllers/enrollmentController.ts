@@ -36,6 +36,9 @@ export const enrollmentController = {
         if (error.message.includes('insufficient') || error.message.includes('Insufficient')) {
           return next(createError(error.message, 400));
         }
+        if (error.message.includes('must complete their profile')) {
+          return next(createError(error.message, 400));
+        }
         if (error.message === 'Event can no longer be modified') {
           return next(createError(error.message, 403));
         }

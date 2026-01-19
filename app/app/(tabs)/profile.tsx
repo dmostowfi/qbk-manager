@@ -68,8 +68,9 @@ export default function ProfileScreen() {
   // Compute action items from profile, filtering out dismissed ones
   const actionItems = useMemo(() => {
     if (!profile) return [];
-    return computeActionItems(profile).filter(item => !dismissedItems.includes(item.id));
-  }, [profile, dismissedItems]);
+    const hasTransactions = transactions.length > 0;
+    return computeActionItems(profile, hasTransactions).filter(item => !dismissedItems.includes(item.id));
+  }, [profile, transactions, dismissedItems]);
 
   const handleDismiss = (itemId: string) => {
     dismissActionItem(itemId);
