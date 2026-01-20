@@ -62,3 +62,10 @@ export interface PlayerFilters {
   membershipStatus?: string;
   search?: string;
 }
+
+// Competition filters
+export interface CompetitionFilters {
+  type?: string;   // LEAGUE or TOURNAMENT
+  format?: string; // INTERMEDIATE_4S or RECREATIONAL_6S
+  status?: string; // DRAFT, REGISTRATION, ACTIVE, COMPLETED
+}

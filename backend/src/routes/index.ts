@@ -5,6 +5,7 @@ import meRouter from './me.js';
 import webhooksRouter from './webhooks.js';
 import productsRouter from './products.js';
 import checkoutRouter from './checkout.js';
+import competitionsRouter from './competitions.js';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use('/me', meRouter);
 router.use('/webhooks', webhooksRouter);
 router.use('/products', productsRouter);
 router.use('/checkout', checkoutRouter);
+router.use('/competitions', competitionsRouter);
 
 export default router;
