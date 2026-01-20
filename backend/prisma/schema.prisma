@@ -34,6 +34,11 @@ model Player {
   updatedAt            DateTime         @updatedAt
   enrollments          Enrollment[]
   transactions         Transaction[]
+  // League relations
+  captainedTeams       Team[]           @relation("TeamCaptain")
+  teamRosters          TeamRoster[]
+  freeAgentEntries     FreeAgent[]
+  leaguePayments       LeaguePayment[]
 }
 
 model Staff {
@@ -66,6 +71,7 @@ model Event {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   enrollments Enrollment[]
+  leagueGame  LeagueGame?    // If this event is a league game
 }
 
 model Enrollment {
@@ -152,4 +158,143 @@ enum EventStatus {
   SCHEDULED
   CANCELLED
   COMPLETED
+}
+
+// ============== LEAGUE ENUMS ==============
+
+enum LeagueFormat {
+  INTERMEDIATE_4S
+  RECREATIONAL_6S
+}
+
+enum LeagueStatus {
+  DRAFT           // Being configured by admin
+  REGISTRATION    // Open for team sign-ups
+  ACTIVE          // Season in progress
+  COMPLETED       // Season finished
+}
+
+enum TeamStatus {
+  PENDING         // Not fully paid
+  CONFIRMED       // Paid and roster complete
+}
+
+enum FreeAgentStatus {
+  SEARCHING       // Looking for a team
+  ASSIGNED        // Placed on a team by admin
+}
+
+enum LeaguePaymentType {
+  FULL            // Captain paid entire team fee
+  SPLIT           // Player paid their portion
+}
+
+enum LeaguePaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+}
+
+// ============== LEAGUE MODELS ==============
+
+model League {
+  id                   String       @id @default(uuid())
+  name                 String       // e.g., "Spring 2025 Tuesday Intermediate 4s"
+  format               LeagueFormat
+  dayOfWeek            Int          // 0=Sunday, 1=Monday, ..., 6=Saturday
+  seasonStartDate      DateTime
+  numberOfWeeks        Int          @default(8)
+  pricePerTeam         Decimal      @db.Decimal(10, 2)
+  maxTeams             Int          @default(8)
+  status               LeagueStatus @default(DRAFT)
+  registrationDeadline DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  teams      Team[]
+  freeAgents FreeAgent[]
+  games      LeagueGame[]
+}
+
+model Team {
+  id         String     @id @default(uuid())
+  name       String
+  leagueId   String
+  captainId  String
+  status     TeamStatus @default(PENDING)
+  paidInFull Boolean    @default(false) // true = captain paid entire fee
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  league    League          @relation(fields: [leagueId], references: [id])
+  captain   Player          @relation("TeamCaptain", fields: [captainId], references: [id])
+  roster    TeamRoster[]
+  homeGames LeagueGame[]    @relation("HomeTeam")
+  awayGames LeagueGame[]    @relation("AwayTeam")
+  payments  LeaguePayment[]
+
+  @@unique([leagueId, name])
+}
+
+model TeamRoster {
+  id       String   @id @default(uuid())
+  teamId   String
+  playerId String
+  joinedAt DateTime @default(now())
+
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([teamId, playerId])
+}
+
+model LeagueGame {
+  id         String   @id @default(uuid())
+  leagueId   String
+  eventId    String   @unique // Links to Event for calendar display
+  homeTeamId String
+  awayTeamId String
+  weekNumber Int
+  timeSlot   Int      // 0=6pm, 1=7pm, 2=8pm, 3=9pm
+  homeScore  Int?
+  awayScore  Int?
+  createdAt  DateTime @default(now())
+
+  league   League @relation(fields: [leagueId], references: [id])
+  event    Event  @relation(fields: [eventId], references: [id])
+  homeTeam Team   @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam Team   @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  @@index([leagueId, weekNumber])
+}
+
+model FreeAgent {
+  id        String          @id @default(uuid())
+  leagueId  String
+  playerId  String
+  status    FreeAgentStatus @default(SEARCHING)
+  notes     String?         // Player can leave notes about availability/preferences
+  createdAt DateTime        @default(now())
+
+  league League @relation(fields: [leagueId], references: [id])
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([leagueId, playerId])
+}
+
+model LeaguePayment {
+  id              String              @id @default(uuid())
+  teamId          String
+  playerId        String
+  amount          Decimal             @db.Decimal(10, 2)
+  paymentType     LeaguePaymentType
+  stripeSessionId String?             @unique
+  status          LeaguePaymentStatus @default(PENDING)
+  paidAt          DateTime?
+  createdAt       DateTime            @default(now())
+
+  team   Team   @relation(fields: [teamId], references: [id])
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@index([teamId])
 }
