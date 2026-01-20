@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import competitionService from '../services/competitionService.js';
+import scheduleService from '../services/scheduleService.js';
 import { createError } from '../middleware/errorHandler.js';
 import { CompetitionFilters } from '../types/index.js';
 
@@ -194,6 +195,107 @@ export const competitionController = {
     } catch (error) {
       if (error instanceof Error && error.message === 'Competition not found') {
         return next(createError(error.message, 404));
+      }
+      next(error);
+    }
+  },
+
+  // ============== SCHEDULE METHODS ==============
+
+  /**
+   * POST /api/competitions/:id/schedule
+   * Generate the round-robin schedule for a competition
+   *
+   * BODY: {
+   *   startDate: string,      // First game date
+   *   dayOfWeek: number,      // 0-6 (Sun-Sat) - what day games are played
+   *   courtIds: number[],     // Available courts
+   *   numberOfRounds?: number // Optional, defaults to full round-robin
+   * }
+   *
+   * WHY POST not PUT? This creates new resources (Events and Matches).
+   * It's an action that generates data, not an update to existing data.
+   */
+  async generateSchedule(req: Request, res: Response, next: NextFunction) {
+    try {
+      const competitionId = req.params.id;
+      const { startDate, dayOfWeek, courtIds, numberOfRounds } = req.body;
+
+      // Validate required fields
+      if (!startDate || dayOfWeek === undefined || !courtIds || !Array.isArray(courtIds)) {
+        throw createError('Missing required fields: startDate, dayOfWeek, courtIds (array)', 400);
+      }
+
+      if (courtIds.length === 0) {
+        throw createError('At least one court is required', 400);
+      }
+
+      const result = await scheduleService.generateSchedule({
+        competitionId,
+        startDate: new Date(startDate),
+        dayOfWeek: parseInt(dayOfWeek),
+        courtIds: courtIds.map((c: string | number) => parseInt(String(c))),
+        numberOfRounds: numberOfRounds ? parseInt(numberOfRounds) : undefined,
+      });
+
+      res.status(201).json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof Error) {
+        const msg = error.message;
+        if (msg === 'Competition not found') {
+          return next(createError(msg, 404));
+        }
+        if (msg.includes('must be in REGISTRATION') || msg.includes('Need at least') || msg.includes('needs')) {
+          return next(createError(msg, 400));
+        }
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * GET /api/competitions/:id/matches
+   * Get the schedule (all matches) for a competition
+   */
+  async getMatches(req: Request, res: Response, next: NextFunction) {
+    try {
+      const matches = await scheduleService.getSchedule(req.params.id);
+      res.json({ success: true, data: matches });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * PUT /api/competitions/:id/matches/:matchId/score
+   * Record the score for a match
+   *
+   * BODY: { homeScore: number, awayScore: number }
+   */
+  async recordScore(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { matchId } = req.params;
+      const { homeScore, awayScore } = req.body;
+
+      if (homeScore === undefined || awayScore === undefined) {
+        throw createError('homeScore and awayScore are required', 400);
+      }
+
+      const match = await scheduleService.recordScore(
+        matchId,
+        parseInt(homeScore),
+        parseInt(awayScore)
+      );
+
+      res.json({ success: true, data: match });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === 'Match not found') {
+          return next(createError(error.message, 404));
+        }
+        if (error.message.includes('Can only record')) {
+          return next(createError(error.message, 400));
+        }
       }
       next(error);
     }

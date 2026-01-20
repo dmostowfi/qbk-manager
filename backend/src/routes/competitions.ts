@@ -48,6 +48,18 @@ router.put('/:id/status', requireRole(['admin', 'staff']), competitionController
 // DELETE /api/competitions/:id - Delete a competition (DRAFT only)
 router.delete('/:id', requireRole(['admin', 'staff']), competitionController.delete);
 
+// ============== SCHEDULE/MATCH ROUTES ==============
+
+// POST /api/competitions/:id/schedule - Generate round-robin schedule
+// Creates Events and Matches for the entire season
+router.post('/:id/schedule', requireRole(['admin', 'staff']), competitionController.generateSchedule);
+
+// GET /api/competitions/:id/matches - Get all matches (the schedule)
+router.get('/:id/matches', competitionController.getMatches);
+
+// PUT /api/competitions/:id/matches/:matchId/score - Record match score
+router.put('/:id/matches/:matchId/score', requireRole(['admin', 'staff']), competitionController.recordScore);
+
 // ============== TEAM ROUTES ==============
 
 // GET /api/competitions/:competitionId/teams - List teams in competition
