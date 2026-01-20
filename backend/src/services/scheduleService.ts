@@ -43,8 +43,8 @@ interface ScheduleConfig {
   competitionId: string;
   startDate: Date;           // First game date
   dayOfWeek: number;         // 0=Sun, 1=Mon, ..., 6=Sat (for leagues)
-  numberOfRounds?: number;   // Defaults to full round-robin
-  courtIds: number[];        // Available courts
+  numberOfWeeks: number;     // How many weeks the league runs
+  courtIds: number[];        // Available courts (e.g., [1, 2, 3])
 }
 
 interface Matchup {
@@ -65,13 +65,12 @@ export const scheduleService = {
    *
    * STEPS:
    * 1. Validate competition is ready (REGISTRATION status, 2+ teams)
-   * 2. Generate round-robin pairings
-   * 3. Assign time slots fairly
+   * 2. Generate round-robin pairings for the number of weeks
+   * 3. Assign time slots and courts fairly
    * 4. Create Event and Match records
-   * 5. Update competition status to ACTIVE
    */
   async generateSchedule(config: ScheduleConfig) {
-    const { competitionId, startDate, dayOfWeek, courtIds } = config;
+    const { competitionId, startDate, dayOfWeek, numberOfWeeks, courtIds } = config;
 
     // 1. Validate competition
     const competition = await prisma.competition.findUnique({
@@ -104,16 +103,16 @@ export const scheduleService = {
       }
     }
 
-    // 2. Generate round-robin pairings
+    // 2. Generate round-robin pairings for the specified number of weeks
+    // If weeks > teams-1, matchups will repeat (teams play each other multiple times)
     const teamIds = competition.teams.map((t) => t.id);
-    const numberOfRounds = config.numberOfRounds ?? teamIds.length - 1;
-    const pairings = generateRoundRobinPairings(teamIds, numberOfRounds);
+    const pairings = generateRoundRobinPairings(teamIds, numberOfWeeks);
 
-    // 3. Calculate dates for each round
-    const roundDates = calculateRoundDates(startDate, dayOfWeek, numberOfRounds);
+    // 3. Calculate dates for each week
+    const weekDates = calculateRoundDates(startDate, dayOfWeek, numberOfWeeks);
 
-    // 4. Assign time slots fairly and create scheduled matches
-    const scheduledMatches = assignTimeSlots(pairings, roundDates, courtIds);
+    // 4. Assign time slots and courts fairly
+    const scheduledMatches = assignTimeSlotsAndCourts(pairings, weekDates, courtIds);
 
     // 5. Create Events and Matches in a transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -170,7 +169,7 @@ export const scheduleService = {
         name: competition.name,
       },
       matchesCreated: result.length,
-      rounds: numberOfRounds,
+      weeks: numberOfWeeks,
       matches: result,
     };
   },
@@ -303,22 +302,27 @@ function calculateRoundDates(startDate: Date, dayOfWeek: number, numberOfRounds:
 }
 
 /**
- * Assign time slots fairly using "slot debt" tracking
+ * Assign time slots and courts fairly
  *
- * ALGORITHM:
- * 1. Track each team's "slot debt" (how many bad slots they've had)
- * 2. For each round, sort matchups by combined debt of both teams
- * 3. Assign best slots to highest-debt matchups
+ * COURT USAGE:
+ * - Multiple matches can happen at the same time on different courts
+ * - Example with 3 courts: 6pm has Court 1, Court 2, Court 3 available
+ * - Fill courts at each time slot before moving to next time slot
+ *
+ * FAIR TIME SLOT ROTATION:
+ * - Track "slot debt" per team (how many bad slots they've had)
+ * - Teams with highest debt get priority for best time slots (6pm)
+ * - Over the season, everyone gets roughly equal good/bad slots
  *
  * SLOT DEBT CALCULATION:
- * - Average slot weight is 2.5 (average of 4,3,2,1)
- * - If team gets 6pm slot (weight 4), debt decreases by 1.5 (4 - 2.5)
- * - If team gets 9pm slot (weight 1), debt increases by 1.5 (2.5 - 1)
- * - Over time, debt balances out - everyone gets fair mix of slots
+ * - Slots weighted: 6pm=4, 7pm=3, 8pm=2, 9pm=1
+ * - Average weight is 2.5
+ * - Getting 6pm (weight 4) decreases debt by 1.5
+ * - Getting 9pm (weight 1) increases debt by 1.5
  */
-function assignTimeSlots(
+function assignTimeSlotsAndCourts(
   pairings: Matchup[][],
-  roundDates: Date[],
+  weekDates: Date[],
   courtIds: number[]
 ): ScheduledMatch[] {
   const scheduledMatches: ScheduledMatch[] = [];
@@ -330,25 +334,34 @@ function assignTimeSlots(
     slotDebt[matchup.awayTeamId] = 0;
   });
 
-  pairings.forEach((roundMatchups, roundIndex) => {
-    const roundNumber = roundIndex + 1;
-    const date = roundDates[roundIndex];
+  // Number of matches that can happen at each time slot
+  const matchesPerTimeSlot = courtIds.length;
 
-    // Sort matchups by combined slot debt (highest debt first = gets best slot)
-    const sortedMatchups = [...roundMatchups].sort((a, b) => {
+  pairings.forEach((weekMatchups, weekIndex) => {
+    const weekNumber = weekIndex + 1;
+    const date = weekDates[weekIndex];
+
+    // Sort matchups by combined slot debt (highest debt first = gets best time slot)
+    const sortedMatchups = [...weekMatchups].sort((a, b) => {
       const debtA = slotDebt[a.homeTeamId] + slotDebt[a.awayTeamId];
       const debtB = slotDebt[b.homeTeamId] + slotDebt[b.awayTeamId];
-      return debtB - debtA; // Higher debt gets priority
+      return debtB - debtA; // Higher debt gets priority for better slots
     });
 
-    // Assign slots (best slots first)
-    sortedMatchups.forEach((matchup, slotIndex) => {
-      const timeSlot = TIME_SLOTS[slotIndex % TIME_SLOTS.length];
-      const courtId = courtIds[Math.floor(slotIndex / TIME_SLOTS.length) % courtIds.length];
+    // Assign matches to time slots and courts
+    // Fill all courts at 6pm first, then all courts at 7pm, etc.
+    sortedMatchups.forEach((matchup, matchIndex) => {
+      // Which time slot? (0, 1, 2, 3 = 6pm, 7pm, 8pm, 9pm)
+      const timeSlotIndex = Math.floor(matchIndex / matchesPerTimeSlot);
+      const timeSlot = TIME_SLOTS[timeSlotIndex % TIME_SLOTS.length];
+
+      // Which court within this time slot?
+      const courtIndex = matchIndex % matchesPerTimeSlot;
+      const courtId = courtIds[courtIndex];
 
       scheduledMatches.push({
         ...matchup,
-        roundNumber,
+        roundNumber: weekNumber,
         date: new Date(date),
         startHour: timeSlot,
         courtId,
