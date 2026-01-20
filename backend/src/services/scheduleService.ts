@@ -76,7 +76,7 @@ export const scheduleService = {
     const competition = await prisma.competition.findUnique({
       where: { id: competitionId },
       include: {
-        teams: { select: { id: true, name: true } },
+        teams: { select: { id: true, name: true, status: true } },
       },
     });
 
@@ -92,9 +92,14 @@ export const scheduleService = {
       throw new Error('Need at least 2 teams to generate schedule');
     }
 
-    // Check all teams have valid rosters
+    // Check all teams are paid and have valid rosters
     const requiredSize = competition.format === 'INTERMEDIATE_4S' ? 4 : 6;
     for (const team of competition.teams) {
+      // Check payment status
+      if (team.status !== 'CONFIRMED') {
+        throw new Error(`Team "${team.name}" has not completed payment`);
+      }
+
       const rosterCount = await prisma.teamRoster.count({
         where: { teamId: team.id },
       });
@@ -229,16 +234,21 @@ export const scheduleService = {
  * ALGORITHM:
  * - Fix one team in place, rotate others around it
  * - Each rotation produces one round of matchups
- * - Guarantees each team plays every other team exactly once
+ * - Guarantees each team plays every other team exactly once per cycle
  *
  * EXAMPLE for 4 teams [A, B, C, D]:
  *   Round 1: A-D, B-C (A fixed, others rotate)
  *   Round 2: A-C, D-B
  *   Round 3: A-B, C-D
  *
+ * EXTENDED SEASONS:
+ * - If numberOfWeeks > teams-1, we cycle through matchups again
+ * - Example: 4 teams, 8 weeks = 2 full cycles + 2 extra weeks
+ * - Home/away flips on the second cycle for fairness
+ *
  * For odd teams, add a "BYE" placeholder - team matched with BYE skips that round
  */
-function generateRoundRobinPairings(teamIds: string[], numberOfRounds: number): Matchup[][] {
+function generateRoundRobinPairings(teamIds: string[], numberOfWeeks: number): Matchup[][] {
   const teams = [...teamIds];
 
   // If odd number of teams, add a "bye" placeholder
@@ -247,35 +257,65 @@ function generateRoundRobinPairings(teamIds: string[], numberOfRounds: number): 
   }
 
   const n = teams.length;
+  const roundsPerCycle = n - 1; // Full round-robin cycle length
   const rounds: Matchup[][] = [];
 
-  for (let round = 0; round < Math.min(numberOfRounds, n - 1); round++) {
+  for (let week = 0; week < numberOfWeeks; week++) {
+    // Which round within the current cycle? (0 to roundsPerCycle-1)
+    const roundInCycle = week % roundsPerCycle;
+
+    // Which cycle are we in? (0, 1, 2, ...)
+    const cycleNumber = Math.floor(week / roundsPerCycle);
+
+    // Reset team positions at the start of each cycle
+    // (We need to recalculate positions based on roundInCycle)
+    const rotatedTeams = getRotatedTeams(teamIds, roundInCycle);
+
     const matchups: Matchup[] = [];
 
-    for (let i = 0; i < n / 2; i++) {
-      const home = teams[i];
-      const away = teams[n - 1 - i];
+    for (let i = 0; i < rotatedTeams.length / 2; i++) {
+      const team1 = rotatedTeams[i];
+      const team2 = rotatedTeams[rotatedTeams.length - 1 - i];
 
       // Skip matches involving BYE
-      if (home !== 'BYE' && away !== 'BYE') {
-        // Alternate home/away to be fair
-        if (round % 2 === 0) {
-          matchups.push({ homeTeamId: home, awayTeamId: away });
+      if (team1 !== 'BYE' && team2 !== 'BYE') {
+        // Alternate home/away based on week AND cycle
+        // This ensures teams swap home/away when they replay each other
+        const homeAwayFlip = (week + cycleNumber) % 2 === 0;
+
+        if (homeAwayFlip) {
+          matchups.push({ homeTeamId: team1, awayTeamId: team2 });
         } else {
-          matchups.push({ homeTeamId: away, awayTeamId: home });
+          matchups.push({ homeTeamId: team2, awayTeamId: team1 });
         }
       }
     }
 
     rounds.push(matchups);
+  }
 
-    // Rotate teams (keep first team fixed, rotate others)
-    // [A, B, C, D] -> [A, D, B, C]
+  return rounds;
+}
+
+/**
+ * Get team array after N rotations (for round-robin circle method)
+ * First team stays fixed, others rotate
+ */
+function getRotatedTeams(teamIds: string[], rotations: number): string[] {
+  const teams = [...teamIds];
+
+  // If odd number of teams, add a "bye" placeholder
+  if (teams.length % 2 !== 0) {
+    teams.push('BYE');
+  }
+
+  // Apply rotations: keep first team fixed, rotate others
+  for (let r = 0; r < rotations; r++) {
     const last = teams.pop()!;
     teams.splice(1, 0, last);
   }
 
-  return rounds;
+  return teams;
 }
 
 /**
@@ -311,8 +351,14 @@ function calculateRoundDates(startDate: Date, dayOfWeek: number, numberOfRounds:
  *
  * FAIR TIME SLOT ROTATION:
  * - Track "slot debt" per team (how many bad slots they've had)
- * - Teams with highest debt get priority for best time slots (6pm)
- * - Over the season, everyone gets roughly equal good/bad slots
+ * - Use MAX debt of either team in a matchup (not combined!)
+ * - This ensures the team with highest individual debt gets priority
+ *
+ * WHY MAX, NOT COMBINED?
+ * - Combined: Team A (+3) vs Team B (+3) = 6, Team C (+5) vs Team D (0) = 5
+ *   → Match A gets 6pm, but Team C has highest individual debt!
+ * - Max: Match A max = 3, Match B max = 5
+ *   → Match B gets 6pm, Team C gets compensated ✓
  *
  * SLOT DEBT CALCULATION:
  * - Slots weighted: 6pm=4, 7pm=3, 8pm=2, 9pm=1
@@ -341,11 +387,12 @@ function assignTimeSlotsAndCourts(
     const weekNumber = weekIndex + 1;
     const date = weekDates[weekIndex];
 
-    // Sort matchups by combined slot debt (highest debt first = gets best time slot)
+    // Sort matchups by MAX slot debt of either team (not combined!)
+    // This ensures the team with highest individual debt gets priority
     const sortedMatchups = [...weekMatchups].sort((a, b) => {
-      const debtA = slotDebt[a.homeTeamId] + slotDebt[a.awayTeamId];
-      const debtB = slotDebt[b.homeTeamId] + slotDebt[b.awayTeamId];
-      return debtB - debtA; // Higher debt gets priority for better slots
+      const maxDebtA = Math.max(slotDebt[a.homeTeamId], slotDebt[a.awayTeamId]);
+      const maxDebtB = Math.max(slotDebt[b.homeTeamId], slotDebt[b.awayTeamId]);
+      return maxDebtB - maxDebtA; // Higher max debt gets priority for better slots
     });
 
     // Assign matches to time slots and courts
