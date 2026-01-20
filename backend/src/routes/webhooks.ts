@@ -3,6 +3,7 @@ import { Webhook } from 'svix';
 import { PrismaClient, MembershipType } from '@prisma/client';
 import Stripe from 'stripe';
 import { stripeService } from '../services/stripeService.js';
+import { teamPaymentService } from '../services/teamPaymentService.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -209,6 +210,14 @@ router.post('/stripe', async (req: Request, res: Response) => {
  */
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const sessionId = session.id;
+
+  // Check if this is a team payment (has type: 'team_payment' in metadata)
+  if (session.metadata?.type === 'team_payment') {
+    await teamPaymentService.handlePaymentComplete(sessionId);
+    return;
+  }
+
+  // Otherwise, handle as regular product purchase
   const playerId = session.metadata?.playerId;
 
   if (!playerId) {
@@ -297,6 +306,13 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
  * Handle expired checkout - mark transaction as failed
  */
 async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
+  // Check if this is a team payment
+  if (session.metadata?.type === 'team_payment') {
+    await teamPaymentService.handlePaymentExpired(session.id);
+    return;
+  }
+
+  // Otherwise, handle as regular transaction
   const transaction = await prisma.transaction.findUnique({
     where: { stripeSessionId: session.id },
   });

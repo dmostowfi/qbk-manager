@@ -82,6 +82,16 @@ router.post('/:competitionId/teams/:teamId/roster', requireRole(['admin', 'staff
 // (Captain can remove from their team, Admin/Staff can remove from any team)
 router.delete('/:competitionId/teams/:teamId/roster/:playerId', requireRole(['admin', 'staff', 'player']), teamController.removeFromRoster);
 
+// ============== TEAM PAYMENT ROUTES ==============
+
+// GET /api/competitions/:competitionId/teams/:teamId/payments - Get payment status
+// (Captain can view their team, Admin/Staff can view any team)
+router.get('/:competitionId/teams/:teamId/payments', requireRole(['admin', 'staff', 'player']), teamController.getPaymentStatus);
+
+// POST /api/competitions/:competitionId/teams/:teamId/checkout - Create checkout session
+// (Any roster player can pay - FULL only for captain, SPLIT for anyone)
+router.post('/:competitionId/teams/:teamId/checkout', requireRole(['player']), teamController.createCheckout);
+
 // ============== FUTURE: FREE AGENT ROUTES (Phase 5) ==============
 // POST   /:competitionId/free-agents              - Register as free agent
 // GET    /:competitionId/free-agents              - List free agents (admin)

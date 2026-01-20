@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import teamService from '../services/teamService.js';
+import teamPaymentService from '../services/teamPaymentService.js';
 import { createError } from '../middleware/errorHandler.js';
 import { PrismaClient } from '@prisma/client';
 
@@ -211,6 +212,87 @@ export const teamController = {
       const teams = await teamService.findByPlayer(authContext.playerId!);
       res.json({ success: true, data: teams });
     } catch (error) {
+      next(error);
+    }
+  },
+
+  // ============== PAYMENT METHODS ==============
+
+  /**
+   * GET /api/competitions/:competitionId/teams/:teamId/payments
+   * Get payment status for a team
+   *
+   * WHO: Captain of the team OR Admin/Staff
+   *
+   * RETURNS: Who's paid, who owes, total amounts
+   */
+  async getPaymentStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { teamId } = req.params;
+      const authContext = req.authContext!;
+
+      // Authorization: Check if user can view this team's payments
+      await assertCanModifyTeam(teamId, authContext);
+
+      const status = await teamPaymentService.getPaymentStatus(teamId);
+      res.json({ success: true, data: status });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === 'Team not found') {
+          return next(createError(error.message, 404));
+        }
+        if (error.message === 'Not authorized to modify this team') {
+          return next(createError('Not authorized to view this team\'s payments', 403));
+        }
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/competitions/:competitionId/teams/:teamId/checkout
+   * Create a Stripe checkout session for team payment
+   *
+   * WHO: Player on the team roster
+   * BODY: { paymentType: 'FULL' | 'SPLIT' }
+   *
+   * RULES:
+   * - Only captain can pay FULL
+   * - Any roster player can pay SPLIT (their share)
+   */
+  async createCheckout(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { teamId } = req.params;
+      const { paymentType } = req.body;
+      const authContext = req.authContext!;
+
+      if (authContext.role !== 'player') {
+        throw createError('Only players can make team payments', 403);
+      }
+
+      if (!paymentType || !['FULL', 'SPLIT'].includes(paymentType)) {
+        throw createError('paymentType must be FULL or SPLIT', 400);
+      }
+
+      const result = await teamPaymentService.createCheckoutSession(
+        teamId,
+        authContext.playerId!,
+        paymentType
+      );
+
+      res.status(201).json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof Error) {
+        const msg = error.message;
+        if (msg === 'Team not found' || msg === 'Player not found') {
+          return next(createError(msg, 404));
+        }
+        if (msg.includes('not open') || msg.includes('not on this team') ||
+            msg.includes('Only the team captain') || msg.includes('already paid') ||
+            msg.includes('already been paid')) {
+          return next(createError(msg, 400));
+        }
+      }
       next(error);
     }
   },
