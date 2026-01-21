@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import competitionController from '../controllers/competitionController.js';
 import teamController from '../controllers/teamController.js';
+import freeAgentController from '../controllers/freeAgentController.js';
 import { requireRole } from '../middleware/auth.js';
 
 const router = Router();
@@ -92,9 +93,26 @@ router.get('/:competitionId/teams/:teamId/payments', requireRole(['admin', 'staf
 // (Any roster player can pay - FULL only for captain, SPLIT for anyone)
 router.post('/:competitionId/teams/:teamId/checkout', requireRole(['player']), teamController.createCheckout);
 
-// ============== FUTURE: FREE AGENT ROUTES (Phase 5) ==============
-// POST   /:competitionId/free-agents              - Register as free agent
-// GET    /:competitionId/free-agents              - List free agents (admin)
-// PUT    /:competitionId/free-agents/:faId        - Assign free agent to team (admin)
+// ============== FREE AGENT ROUTES ==============
+
+// GET /api/competitions/:competitionId/free-agents - List free agents
+// (Admin/Staff only - to see who needs teams)
+router.get('/:competitionId/free-agents', requireRole(['admin', 'staff']), freeAgentController.getByCompetition);
+
+// GET /api/competitions/:competitionId/free-agents/:freeAgentId - Get single free agent
+// (Admin/Staff or the player themselves)
+router.get('/:competitionId/free-agents/:freeAgentId', requireRole(['admin', 'staff', 'player']), freeAgentController.getById);
+
+// POST /api/competitions/:competitionId/free-agents - Register as free agent
+// (Any authenticated player)
+router.post('/:competitionId/free-agents', requireRole(['player']), freeAgentController.register);
+
+// PUT /api/competitions/:competitionId/free-agents/:freeAgentId/assign - Assign to team
+// (Admin/Staff only)
+router.put('/:competitionId/free-agents/:freeAgentId/assign', requireRole(['admin', 'staff']), freeAgentController.assignToTeam);
+
+// DELETE /api/competitions/:competitionId/free-agents/:freeAgentId - Withdraw
+// (Player can withdraw their own entry)
+router.delete('/:competitionId/free-agents/:freeAgentId', requireRole(['player']), freeAgentController.withdraw);
 
 export default router;

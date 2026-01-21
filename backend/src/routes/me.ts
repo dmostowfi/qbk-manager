@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireRole } from '../middleware/auth.js';
 import meController from '../controllers/meController.js';
 import teamController from '../controllers/teamController.js';
+import freeAgentController from '../controllers/freeAgentController.js';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.post('/sign', meController.signAgreement);
 
 // Competition-related routes for current player
 router.get('/teams', teamController.getMyTeams);
+router.get('/free-agent-entries', freeAgentController.getMyEntries);
 
 export default router;
