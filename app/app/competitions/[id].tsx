@@ -8,13 +8,16 @@ import {
   RefreshControl,
   ScrollView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import dayjs from 'dayjs';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { useCompetition } from '../../shared/hooks/useCompetition';
+import { teamsApi } from '../../shared/api/services';
 import TeamList from '../../components/competitions/TeamList';
+import TeamForm from '../../components/competitions/TeamForm';
 import ScheduleList from '../../components/competitions/ScheduleList';
 import StandingsTable from '../../components/competitions/StandingsTable';
 import { brand } from '../../constants/branding';
@@ -44,10 +47,26 @@ export default function CompetitionDetailScreen() {
   const { role } = useAppAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('teams');
   const [refreshing, setRefreshing] = useState(false);
+  const [showTeamForm, setShowTeamForm] = useState(false);
 
-  const { competition, teams, matches, standings, loading, error, refetch } = useCompetition(id);
+  const { competition, teams, matches, standings, loading, error, refetch, refetchTeams } = useCompetition(id);
 
   const canEdit = role === 'admin' || role === 'staff';
+  const isPlayer = role === 'player';
+  const isRegistrationOpen = competition?.status === 'REGISTRATION';
+  const spotsAvailable = competition ? competition.maxTeams - teams.length : 0;
+  const canRegister = isRegistrationOpen && spotsAvailable > 0;
+
+  const handleRegisterTeam = async (teamName: string) => {
+    if (!id) return;
+    try {
+      await teamsApi.register(id, { name: teamName });
+      await refetchTeams();
+    } catch (err: any) {
+      Alert.alert('Registration Failed', err.message || 'Could not register team');
+      throw err;
+    }
+  };
 
   // Refetch on focus
   useFocusEffect(
@@ -157,6 +176,27 @@ export default function CompetitionDetailScreen() {
           <StandingsTable standings={standings} />
         )}
       </View>
+
+      {/* Register Team FAB */}
+      {canRegister && activeTab === 'teams' && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => setShowTeamForm(true)}
+        >
+          <FontAwesome name="plus" size={16} color="#fff" />
+          <Text style={styles.fabText}>Register Team</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Team Registration Modal */}
+      {competition && (
+        <TeamForm
+          visible={showTeamForm}
+          competition={competition}
+          onClose={() => setShowTeamForm(false)}
+          onSubmit={handleRegisterTeam}
+        />
+      )}
     </View>
   );
 }
@@ -284,5 +324,27 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#fff',
     fontWeight: '500',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: brand.colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 28,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  fabText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
   },
 });
