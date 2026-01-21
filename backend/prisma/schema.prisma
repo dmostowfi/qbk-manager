@@ -34,6 +34,11 @@ model Player {
   updatedAt            DateTime         @updatedAt
   enrollments          Enrollment[]
   transactions         Transaction[]
+  // Competition relations
+  captainedTeams       Team[]           @relation("TeamCaptain")
+  teamRosters          TeamRoster[]
+  freeAgentEntries     FreeAgent[]
+  teamPayments         TeamPayment[]
 }
 
 model Staff {
@@ -66,6 +71,7 @@ model Event {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   enrollments Enrollment[]
+  match       Match?         // If this event is a competition match
 }
 
 model Enrollment {
@@ -152,4 +158,148 @@ enum EventStatus {
   SCHEDULED
   CANCELLED
   COMPLETED
+}
+
+// ============== COMPETITION ENUMS ==============
+
+enum CompetitionType {
+  LEAGUE          // Multi-week, recurring on same day
+  TOURNAMENT      // Single day or weekend event
+}
+
+enum CompetitionFormat {
+  INTERMEDIATE_4S
+  RECREATIONAL_6S
+}
+
+enum CompetitionStatus {
+  DRAFT           // Being configured by admin
+  REGISTRATION    // Open for team sign-ups
+  ACTIVE          // Season/tournament in progress
+  COMPLETED       // Finished
+}
+
+enum TeamStatus {
+  PENDING         // Not fully paid
+  CONFIRMED       // Paid and roster complete
+}
+
+enum FreeAgentStatus {
+  SEARCHING       // Looking for a team
+  ASSIGNED        // Placed on a team by admin
+}
+
+enum TeamPaymentType {
+  FULL            // Captain paid entire team fee
+  SPLIT           // Player paid their portion
+}
+
+enum TeamPaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+}
+
+// ============== COMPETITION MODELS ==============
+
+model Competition {
+  id                   String            @id @default(uuid())
+  name                 String            // e.g., "Spring 2025 Tuesday Intermediate 4s"
+  type                 CompetitionType
+  format               CompetitionFormat
+  startDate            DateTime
+  endDate              DateTime?
+  pricePerTeam         Decimal           @db.Decimal(10, 2)
+  maxTeams             Int               @default(8)
+  status               CompetitionStatus @default(DRAFT)
+  registrationDeadline DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  teams      Team[]
+  freeAgents FreeAgent[]
+  matches    Match[]
+}
+
+model Team {
+  id            String     @id @default(uuid())
+  name          String
+  competitionId String
+  captainId     String
+  status        TeamStatus @default(PENDING)
+  paidInFull    Boolean    @default(false) // true = captain paid entire fee
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  competition Competition   @relation(fields: [competitionId], references: [id])
+  captain     Player        @relation("TeamCaptain", fields: [captainId], references: [id])
+  roster      TeamRoster[]
+  homeMatches Match[]       @relation("HomeTeam")
+  awayMatches Match[]       @relation("AwayTeam")
+  payments    TeamPayment[]
+
+  @@unique([competitionId, name])
+}
+
+model TeamRoster {
+  id       String   @id @default(uuid())
+  teamId   String
+  playerId String
+  joinedAt DateTime @default(now())
+
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([teamId, playerId])
+}
+
+model Match {
+  id            String   @id @default(uuid())
+  competitionId String
+  eventId       String   @unique // Links to Event for calendar display
+  homeTeamId    String
+  awayTeamId    String
+  roundNumber   Int      // Week number for leagues, round for tournaments
+  isPlayoff     Boolean  @default(false)
+  homeScore     Int?
+  awayScore     Int?
+  createdAt     DateTime @default(now())
+
+  competition Competition @relation(fields: [competitionId], references: [id])
+  event       Event       @relation(fields: [eventId], references: [id])
+  homeTeam    Team        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    Team        @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  @@index([competitionId, roundNumber])
+}
+
+model FreeAgent {
+  id            String          @id @default(uuid())
+  competitionId String
+  playerId      String
+  status        FreeAgentStatus @default(SEARCHING)
+  notes         String?         // Player can leave notes about availability/preferences
+  createdAt     DateTime        @default(now())
+
+  competition Competition @relation(fields: [competitionId], references: [id])
+  player      Player      @relation(fields: [playerId], references: [id])
+
+  @@unique([competitionId, playerId])
+}
+
+model TeamPayment {
+  id              String            @id @default(uuid())
+  teamId          String
+  playerId        String
+  amount          Decimal           @db.Decimal(10, 2)
+  paymentType     TeamPaymentType
+  stripeSessionId String?           @unique
+  status          TeamPaymentStatus @default(PENDING)
+  paidAt          DateTime?
+  createdAt       DateTime          @default(now())
+
+  team   Team   @relation(fields: [teamId], references: [id])
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@index([teamId])
 }
