@@ -89,24 +89,38 @@ export default function CompetitionDetailScreen() {
 
   const handleStatusChange = async () => {
     if (!id || !nextStatus) return;
-    Alert.alert(
-      nextStatus.label,
-      `Are you sure you want to change status to "${statusLabels[nextStatus.status]}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              await competitionsApi.updateStatus(id, nextStatus.status);
-              await refetch();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Could not update status');
-            }
+
+    const confirmMessage = `Are you sure you want to change status to "${statusLabels[nextStatus.status]}"?`;
+
+    // Alert.alert doesn't work on web, use window.confirm instead
+    if (Platform.OS === 'web') {
+      if (!window.confirm(confirmMessage)) return;
+      try {
+        await competitionsApi.updateStatus(id, nextStatus.status);
+        await refetch();
+      } catch (err: any) {
+        window.alert(err.message || 'Could not update status');
+      }
+    } else {
+      Alert.alert(
+        nextStatus.label,
+        confirmMessage,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Confirm',
+            onPress: async () => {
+              try {
+                await competitionsApi.updateStatus(id, nextStatus.status);
+                await refetch();
+              } catch (err: any) {
+                Alert.alert('Error', err.message || 'Could not update status');
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleRegisterTeam = async (teamName: string) => {
