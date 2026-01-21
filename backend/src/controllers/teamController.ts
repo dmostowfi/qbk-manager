@@ -216,6 +216,82 @@ export const teamController = {
     }
   },
 
+  /**
+   * GET /api/competitions/:competitionId/teams/:teamId/roster/search
+   * Search for players to add to roster
+   *
+   * WHO: Captain of the team OR Admin/Staff
+   * QUERY: { search: string } - min 2 characters
+   *
+   * FILTERS OUT:
+   * - Players already on this team
+   * - Players already on another team in this competition
+   *
+   * RETURNS: Array of eligible players
+   */
+  async searchPlayersForRoster(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { competitionId, teamId } = req.params;
+      const { search } = req.query;
+      const authContext = req.authContext!;
+
+      // Authorization: Check if user is captain or admin/staff
+      await assertCanModifyTeam(teamId, authContext);
+
+      if (!search || typeof search !== 'string' || search.length < 2) {
+        return res.json({ success: true, data: [] });
+      }
+
+      // Get all player IDs already on teams in this competition
+      const teamsInCompetition = await prisma.team.findMany({
+        where: { competitionId },
+        select: {
+          roster: {
+            select: { playerId: true },
+          },
+        },
+      });
+
+      const playersOnTeams = new Set<string>();
+      teamsInCompetition.forEach((team) => {
+        team.roster.forEach((r) => playersOnTeams.add(r.playerId));
+      });
+
+      // Search for players not already on a team
+      const players = await prisma.player.findMany({
+        where: {
+          id: { notIn: Array.from(playersOnTeams) },
+          OR: [
+            { firstName: { contains: search, mode: 'insensitive' } },
+            { lastName: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          membershipStatus: true,
+          profileCompletedAt: true,
+        },
+        take: 20,
+      });
+
+      res.json({ success: true, data: players });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === 'Team not found') {
+          return next(createError(error.message, 404));
+        }
+        if (error.message === 'Not authorized to modify this team') {
+          return next(createError(error.message, 403));
+        }
+      }
+      next(error);
+    }
+  },
+
   // ============== PAYMENT METHODS ==============
 
   /**

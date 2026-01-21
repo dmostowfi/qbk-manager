@@ -72,6 +72,10 @@ router.get('/:competitionId/teams/:teamId', teamController.getById);
 // GET /api/competitions/:competitionId/teams/:teamId/validate - Validate roster
 router.get('/:competitionId/teams/:teamId/validate', teamController.validateRoster);
 
+// GET /api/competitions/:competitionId/teams/:teamId/roster/search - Search players for roster
+// (Captain can search for their team, Admin/Staff can search for any team)
+router.get('/:competitionId/teams/:teamId/roster/search', requireRole(['admin', 'staff', 'player']), teamController.searchPlayersForRoster);
+
 // POST /api/competitions/:competitionId/teams - Register a new team (player becomes captain)
 router.post('/:competitionId/teams', requireRole(['admin', 'staff', 'player']), teamController.register);
 

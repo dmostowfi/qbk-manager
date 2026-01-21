@@ -73,8 +73,7 @@ export default function CompetitionCard({
 
       <View style={styles.footer}>
         <Text style={[styles.capacity, isFull && styles.capacityFull]}>
-          {teamCount}/{competition.maxTeams} teams
-          {isRegistrationOpen && !isFull && ` · ${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left`}
+          {isFull ? 'Full' : `${teamCount}/${competition.maxTeams} teams`}
         </Text>
       </View>
     </TouchableOpacity>

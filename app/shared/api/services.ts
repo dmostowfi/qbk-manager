@@ -337,6 +337,11 @@ export const teamsApi = {
     return response.data.data!;
   },
 
+  searchPlayersForRoster: async (competitionId: string, teamId: string, search: string): Promise<Player[]> => {
+    const response = await api.get<ApiResponse<Player[]>>(`/competitions/${competitionId}/teams/${teamId}/roster/search?search=${encodeURIComponent(search)}`);
+    return response.data.data || [];
+  },
+
   getPaymentStatus: async (competitionId: string, teamId: string): Promise<TeamPaymentStatusResponse> => {
     const response = await api.get<ApiResponse<TeamPaymentStatusResponse>>(`/competitions/${competitionId}/teams/${teamId}/payments`);
     return response.data.data!;

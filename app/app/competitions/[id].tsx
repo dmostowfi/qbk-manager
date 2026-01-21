@@ -16,9 +16,10 @@ import dayjs from 'dayjs';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { useCompetition } from '../../shared/hooks/useCompetition';
 import { teamsApi, competitionsApi } from '../../shared/api/services';
-import { CompetitionFormData, CompetitionStatus } from '../../shared/types';
+import { CompetitionFormData, CompetitionStatus, Team } from '../../shared/types';
 import TeamList from '../../components/competitions/TeamList';
 import TeamForm from '../../components/competitions/TeamForm';
+import TeamDetailModal from '../../components/competitions/TeamDetailModal';
 import CompetitionForm from '../../components/competitions/CompetitionForm';
 import ScheduleList from '../../components/competitions/ScheduleList';
 import StandingsTable from '../../components/competitions/StandingsTable';
@@ -46,11 +47,12 @@ const formatLabels: Record<string, string> = {
 
 export default function CompetitionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { role } = useAppAuth();
+  const { role, userId } = useAppAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('teams');
   const [refreshing, setRefreshing] = useState(false);
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
   const { competition, teams, matches, standings, loading, error, refetch, refetchTeams } = useCompetition(id);
 
@@ -247,7 +249,7 @@ export default function CompetitionDetailScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             contentContainerStyle={styles.scrollContent}
           >
-            <TeamList teams={teams} />
+            <TeamList teams={teams} onTeamPress={(team) => setSelectedTeam(team)} />
           </ScrollView>
         )}
         {activeTab === 'schedule' && (
@@ -285,6 +287,17 @@ export default function CompetitionDetailScreen() {
         competition={competition}
         onClose={() => setShowEditForm(false)}
         onSubmit={handleUpdateCompetition}
+      />
+
+      {/* Team Detail Modal */}
+      <TeamDetailModal
+        visible={!!selectedTeam}
+        team={selectedTeam}
+        competition={competition}
+        currentPlayerId={userId || undefined}
+        isAdmin={canEdit}
+        onClose={() => setSelectedTeam(null)}
+        onUpdate={refetchTeams}
       />
     </View>
   );
