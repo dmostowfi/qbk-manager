@@ -1,0 +1,288 @@
+import { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  Platform,
+} from 'react-native';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import dayjs from 'dayjs';
+import { useAppAuth } from '../../contexts/AuthContext';
+import { useCompetition } from '../../shared/hooks/useCompetition';
+import TeamList from '../../components/competitions/TeamList';
+import ScheduleList from '../../components/competitions/ScheduleList';
+import StandingsTable from '../../components/competitions/StandingsTable';
+import { brand } from '../../constants/branding';
+
+type TabKey = 'teams' | 'schedule' | 'standings';
+
+const tabs: { key: TabKey; label: string; icon: React.ComponentProps<typeof FontAwesome>['name'] }[] = [
+  { key: 'teams', label: 'Teams', icon: 'users' },
+  { key: 'schedule', label: 'Schedule', icon: 'calendar' },
+  { key: 'standings', label: 'Standings', icon: 'list-ol' },
+];
+
+const statusLabels: Record<string, string> = {
+  DRAFT: 'Draft',
+  REGISTRATION: 'Registration Open',
+  ACTIVE: 'In Progress',
+  COMPLETED: 'Completed',
+};
+
+const formatLabels: Record<string, string> = {
+  INTERMEDIATE_4S: 'Intermediate 4v4',
+  RECREATIONAL_6S: 'Recreational 6v6',
+};
+
+export default function CompetitionDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { role } = useAppAuth();
+  const [activeTab, setActiveTab] = useState<TabKey>('teams');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { competition, teams, matches, standings, loading, error, refetch } = useCompetition(id);
+
+  const canEdit = role === 'admin' || role === 'staff';
+
+  // Refetch on focus
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
+
+  if (loading && !competition) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={brand.colors.primary} />
+      </View>
+    );
+  }
+
+  if (error || !competition) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>{error || 'Competition not found'}</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const teamCount = teams.length;
+  const startDate = dayjs(competition.startDate);
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backArrow} onPress={() => router.back()}>
+          <FontAwesome name="arrow-left" size={20} color={brand.colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.title} numberOfLines={1}>{competition.name}</Text>
+          <View style={styles.headerMeta}>
+            <View style={[styles.statusBadge, styles[`status_${competition.status}`]]}>
+              <Text style={styles.statusText}>{statusLabels[competition.status]}</Text>
+            </View>
+            <Text style={styles.metaText}>
+              {formatLabels[competition.format]} · {competition.type}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Info Bar */}
+      <View style={styles.infoBar}>
+        <View style={styles.infoItem}>
+          <FontAwesome name="calendar" size={14} color={brand.colors.textLight} />
+          <Text style={styles.infoText}>{startDate.format('MMM D, YYYY')}</Text>
+        </View>
+        <View style={styles.infoItem}>
+          <FontAwesome name="users" size={14} color={brand.colors.textLight} />
+          <Text style={styles.infoText}>{teamCount}/{competition.maxTeams} teams</Text>
+        </View>
+        <View style={styles.infoItem}>
+          <FontAwesome name="dollar" size={14} color={brand.colors.textLight} />
+          <Text style={styles.infoText}>${competition.pricePerTeam}/team</Text>
+        </View>
+      </View>
+
+      {/* Tab Bar */}
+      <View style={styles.tabBar}>
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            onPress={() => setActiveTab(tab.key)}
+          >
+            <FontAwesome
+              name={tab.icon}
+              size={16}
+              color={activeTab === tab.key ? brand.colors.primary : brand.colors.textLight}
+            />
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Tab Content */}
+      <View style={styles.tabContent}>
+        {activeTab === 'teams' && (
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            contentContainerStyle={styles.scrollContent}
+          >
+            <TeamList teams={teams} />
+          </ScrollView>
+        )}
+        {activeTab === 'schedule' && (
+          <ScheduleList matches={matches} />
+        )}
+        {activeTab === 'standings' && (
+          <StandingsTable standings={standings} />
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: brand.colors.background,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: brand.colors.surface,
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: brand.colors.border,
+  },
+  backArrow: {
+    padding: 8,
+    marginRight: 8,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: brand.colors.text,
+    marginBottom: 4,
+  },
+  headerMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  status_DRAFT: { backgroundColor: brand.colors.border },
+  status_REGISTRATION: { backgroundColor: '#E8F5E9' },
+  status_ACTIVE: { backgroundColor: brand.sidebar.activeBackground },
+  status_COMPLETED: { backgroundColor: '#E3F2FD' },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: brand.colors.text,
+  },
+  metaText: {
+    fontSize: 13,
+    color: brand.colors.textLight,
+  },
+  infoBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: brand.colors.surface,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: brand.colors.border,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  infoText: {
+    fontSize: 13,
+    color: brand.colors.textLight,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: brand.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: brand.colors.border,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: brand.colors.primary,
+  },
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: brand.colors.textLight,
+  },
+  tabLabelActive: {
+    color: brand.colors.primary,
+    fontWeight: '600',
+  },
+  tabContent: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  errorText: {
+    fontSize: 16,
+    color: brand.colors.error,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  backButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 6,
+    backgroundColor: brand.colors.primary,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+});
