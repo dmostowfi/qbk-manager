@@ -15,9 +15,11 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import dayjs from 'dayjs';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { useCompetition } from '../../shared/hooks/useCompetition';
-import { teamsApi } from '../../shared/api/services';
+import { teamsApi, competitionsApi } from '../../shared/api/services';
+import { CompetitionFormData, CompetitionStatus } from '../../shared/types';
 import TeamList from '../../components/competitions/TeamList';
 import TeamForm from '../../components/competitions/TeamForm';
+import CompetitionForm from '../../components/competitions/CompetitionForm';
 import ScheduleList from '../../components/competitions/ScheduleList';
 import StandingsTable from '../../components/competitions/StandingsTable';
 import { brand } from '../../constants/branding';
@@ -48,6 +50,7 @@ export default function CompetitionDetailScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('teams');
   const [refreshing, setRefreshing] = useState(false);
   const [showTeamForm, setShowTeamForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
 
   const { competition, teams, matches, standings, loading, error, refetch, refetchTeams } = useCompetition(id);
 
@@ -56,6 +59,55 @@ export default function CompetitionDetailScreen() {
   const isRegistrationOpen = competition?.status === 'REGISTRATION';
   const spotsAvailable = competition ? competition.maxTeams - teams.length : 0;
   const canRegister = isRegistrationOpen && spotsAvailable > 0;
+
+  // Get next valid status transition
+  const getNextStatus = (current: CompetitionStatus): { status: CompetitionStatus; label: string } | null => {
+    switch (current) {
+      case 'DRAFT':
+        return { status: 'REGISTRATION', label: 'Open Registration' };
+      case 'REGISTRATION':
+        return { status: 'ACTIVE', label: 'Start Competition' };
+      case 'ACTIVE':
+        return { status: 'COMPLETED', label: 'Mark Complete' };
+      default:
+        return null;
+    }
+  };
+
+  const nextStatus = competition ? getNextStatus(competition.status) : null;
+
+  const handleUpdateCompetition = async (data: CompetitionFormData) => {
+    if (!id) return;
+    try {
+      await competitionsApi.update(id, data);
+      await refetch();
+    } catch (err: any) {
+      Alert.alert('Update Failed', err.message || 'Could not update competition');
+      throw err;
+    }
+  };
+
+  const handleStatusChange = async () => {
+    if (!id || !nextStatus) return;
+    Alert.alert(
+      nextStatus.label,
+      `Are you sure you want to change status to "${statusLabels[nextStatus.status]}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              await competitionsApi.updateStatus(id, nextStatus.status);
+              await refetch();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Could not update status');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleRegisterTeam = async (teamName: string) => {
     if (!id) return;
@@ -121,6 +173,11 @@ export default function CompetitionDetailScreen() {
             </Text>
           </View>
         </View>
+        {canEdit && (
+          <TouchableOpacity style={styles.editButton} onPress={() => setShowEditForm(true)}>
+            <FontAwesome name="pencil" size={18} color={brand.colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Info Bar */}
@@ -138,6 +195,16 @@ export default function CompetitionDetailScreen() {
           <Text style={styles.infoText}>${competition.pricePerTeam}/team</Text>
         </View>
       </View>
+
+      {/* Admin Action Bar */}
+      {canEdit && nextStatus && (
+        <View style={styles.adminBar}>
+          <TouchableOpacity style={styles.statusButton} onPress={handleStatusChange}>
+            <FontAwesome name="arrow-right" size={14} color="#fff" />
+            <Text style={styles.statusButtonText}>{nextStatus.label}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Tab Bar */}
       <View style={styles.tabBar}>
@@ -197,6 +264,14 @@ export default function CompetitionDetailScreen() {
           onSubmit={handleRegisterTeam}
         />
       )}
+
+      {/* Edit Competition Modal */}
+      <CompetitionForm
+        visible={showEditForm}
+        competition={competition}
+        onClose={() => setShowEditForm(false)}
+        onSubmit={handleUpdateCompetition}
+      />
     </View>
   );
 }
@@ -228,6 +303,10 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flex: 1,
+  },
+  editButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   title: {
     fontSize: 20,
@@ -274,6 +353,29 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 13,
     color: brand.colors.textLight,
+  },
+  adminBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    backgroundColor: brand.colors.surface,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: brand.colors.border,
+  },
+  statusButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: brand.colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    gap: 8,
+  },
+  statusButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   tabBar: {
     flexDirection: 'row',
