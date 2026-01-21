@@ -12,9 +12,11 @@ import {
   Alert,
 } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Team, Competition, CompetitionFormat, Player } from '../../shared/types';
+import { Team, Competition, CompetitionFormat, Player, TeamPaymentStatusResponse } from '../../shared/types';
 import { teamsApi } from '../../shared/api/services';
 import { getRosterEligibilityError } from '../../shared/utils/competitionUtils';
+import PaymentSection from './PaymentSection';
+import * as WebBrowser from 'expo-web-browser';
 import { brand } from '../../constants/branding';
 
 interface TeamDetailModalProps {
@@ -56,6 +58,10 @@ export default function TeamDetailModal({
   const [pendingAdds, setPendingAdds] = useState<Record<string, Player>>({});
   const [pendingRemoves, setPendingRemoves] = useState<Record<string, string>>({});
 
+  // Payment state
+  const [paymentStatus, setPaymentStatus] = useState<TeamPaymentStatusResponse | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
   const isCaptain = currentPlayerId && team?.captainId === currentPlayerId;
   const canModifyRoster = isAdmin || isCaptain;
 
@@ -66,6 +72,7 @@ export default function TeamDetailModal({
   useEffect(() => {
     if (visible && team) {
       fetchTeamDetails();
+      fetchPaymentStatus();
       // Reset all state when modal opens
       setShowSearch(false);
       setSearchQuery('');
@@ -112,6 +119,49 @@ export default function TeamDetailModal({
       console.error('Failed to fetch team details:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPaymentStatus = async () => {
+    if (!team) return;
+    // Admins can always view, players need to be on roster (backend enforces this)
+    if (!isAdmin && !currentPlayerId) return;
+
+    setPaymentLoading(true);
+    try {
+      const status = await teamsApi.getPaymentStatus(competition.id, team.id);
+      setPaymentStatus(status);
+    } catch (err) {
+      // Non-roster players will get 403, which is expected
+      console.error('Failed to fetch payment status:', err);
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const handlePayFull = async () => {
+    if (!team) return;
+    try {
+      const result = await teamsApi.createCheckout(competition.id, team.id, 'FULL');
+      await WebBrowser.openBrowserAsync(result.url);
+      // Refresh payment status after returning from checkout
+      fetchPaymentStatus();
+      onUpdate();
+    } catch (err: any) {
+      setError(err.message || 'Failed to start checkout');
+    }
+  };
+
+  const handlePayShare = async () => {
+    if (!team) return;
+    try {
+      const result = await teamsApi.createCheckout(competition.id, team.id, 'SPLIT');
+      await WebBrowser.openBrowserAsync(result.url);
+      // Refresh payment status after returning from checkout
+      fetchPaymentStatus();
+      onUpdate();
+    } catch (err: any) {
+      setError(err.message || 'Failed to start checkout');
     }
   };
 
@@ -439,6 +489,18 @@ export default function TeamDetailModal({
                   </View>
                 )}
               </View>
+
+              {/* Payment Section - shown to captain and roster players */}
+              {(canModifyRoster || (currentPlayerId && roster.some(r => r.player?.id === currentPlayerId))) && (
+                <PaymentSection
+                  paymentStatus={paymentStatus}
+                  loading={paymentLoading}
+                  isCaptain={!!isCaptain}
+                  currentPlayerId={currentPlayerId}
+                  onPayFull={isCaptain ? handlePayFull : undefined}
+                  onPayShare={handlePayShare}
+                />
+              )}
             </>
           )}
         </ScrollView>

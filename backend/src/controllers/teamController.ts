@@ -298,7 +298,7 @@ export const teamController = {
    * GET /api/competitions/:competitionId/teams/:teamId/payments
    * Get payment status for a team
    *
-   * WHO: Captain of the team OR Admin/Staff
+   * WHO: Any roster player, Captain, or Admin/Staff
    *
    * RETURNS: Who's paid, who owes, total amounts
    */
@@ -308,7 +308,7 @@ export const teamController = {
       const authContext = req.authContext!;
 
       // Authorization: Check if user can view this team's payments
-      await assertCanModifyTeam(teamId, authContext);
+      await assertCanViewTeamPayments(teamId, authContext);
 
       const status = await teamPaymentService.getPaymentStatus(teamId);
       res.json({ success: true, data: status });
@@ -317,8 +317,8 @@ export const teamController = {
         if (error.message === 'Team not found') {
           return next(createError(error.message, 404));
         }
-        if (error.message === 'Not authorized to modify this team') {
-          return next(createError('Not authorized to view this team\'s payments', 403));
+        if (error.message === 'Not authorized to view this team\'s payments') {
+          return next(createError(error.message, 403));
         }
       }
       next(error);
@@ -402,6 +402,42 @@ async function assertCanModifyTeam(
 
   if (team.captainId !== authContext.playerId) {
     throw new Error('Not authorized to modify this team');
+  }
+}
+
+/**
+ * Helper: Check if the current user can view a team's payment status
+ *
+ * RULES:
+ * - Admin/Staff can view any team
+ * - Any player on the team roster can view
+ */
+async function assertCanViewTeamPayments(
+  teamId: string,
+  authContext: { role: string; playerId?: string }
+): Promise<void> {
+  // Admin/Staff can view any team
+  if (authContext.role === 'admin' || authContext.role === 'staff') {
+    return;
+  }
+
+  // Check if player is on the roster
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      roster: {
+        select: { playerId: true },
+      },
+    },
+  });
+
+  if (!team) {
+    throw new Error('Team not found');
+  }
+
+  const isOnRoster = team.roster.some((r) => r.playerId === authContext.playerId);
+  if (!isOnRoster) {
+    throw new Error('Not authorized to view this team\'s payments');
   }
 }
 
