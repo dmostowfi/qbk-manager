@@ -56,6 +56,20 @@ export const setAuthToken = (token: string | null) => {
   }
 };
 
+// Response interceptor: extract backend error messages
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Extract the actual error message from the backend response
+    if (error.response?.data?.error) {
+      error.message = error.response.data.error;
+    } else if (error.response?.data?.message) {
+      error.message = error.response.data.message;
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Events API
 export const eventsApi = {
   getAll: async (filters?: EventFilters): Promise<Event[]> => {
