@@ -195,3 +195,140 @@ export interface Product {
   };
   price: ProductPrice | null;
 }
+
+// Competition types
+export type CompetitionType = 'LEAGUE' | 'TOURNAMENT';
+export type CompetitionFormat = 'INTERMEDIATE_4S' | 'RECREATIONAL_6S';
+export type CompetitionStatus = 'DRAFT' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED';
+export type TeamStatus = 'PENDING' | 'CONFIRMED';
+export type TeamPaymentType = 'FULL' | 'SPLIT';
+export type TeamPaymentStatus = 'PENDING' | 'COMPLETED' | 'REFUNDED';
+
+export interface Competition {
+  id: string;
+  name: string;
+  type: CompetitionType;
+  format: CompetitionFormat;
+  startDate: string;
+  endDate?: string;
+  pricePerTeam: number;
+  maxTeams: number;
+  status: CompetitionStatus;
+  registrationDeadline?: string;
+  createdAt: string;
+  updatedAt: string;
+  teams?: Team[];
+  _count?: { teams: number };
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  competitionId: string;
+  captainId: string;
+  status: TeamStatus;
+  paidInFull: boolean;
+  createdAt: string;
+  updatedAt: string;
+  roster?: TeamRoster[];
+  captain?: Player;
+  competition?: Competition;
+  payments?: TeamPayment[];
+}
+
+export interface TeamRoster {
+  id: string;
+  teamId: string;
+  playerId: string;
+  joinedAt: string;
+  player?: Player;
+  team?: Team;
+}
+
+export interface Match {
+  id: string;
+  competitionId: string;
+  eventId: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  roundNumber: number;
+  isPlayoff: boolean;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  createdAt: string;
+  event?: Event;
+  homeTeam?: Team;
+  awayTeam?: Team;
+}
+
+export interface TeamPayment {
+  id: string;
+  teamId: string;
+  playerId: string;
+  amount: number;
+  paymentType: TeamPaymentType;
+  stripeSessionId?: string;
+  status: TeamPaymentStatus;
+  paidAt?: string;
+  createdAt: string;
+  player?: Player;
+}
+
+export interface TeamPaymentStatusResponse {
+  teamId: string;
+  teamStatus: TeamStatus;
+  paidInFull: boolean;
+  paidBy?: string;
+  totalAmount: number;
+  playerShare?: number;
+  amountPaid: number;
+  amountOwed: number;
+  playerPayments: {
+    playerId: string;
+    playerName: string;
+    email: string;
+    amountOwed: number;
+    amountPaid: number;
+    paid: boolean;
+    paidAt: string | null;
+  }[];
+  playersRemaining?: number;
+}
+
+export interface Standing {
+  teamId: string;
+  teamName: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  points: number;
+  gamesPlayed: number;
+}
+
+export interface CompetitionFilters {
+  status?: CompetitionStatus;
+  type?: CompetitionType;
+  format?: CompetitionFormat;
+}
+
+export interface CompetitionFormData {
+  name: string;
+  type: CompetitionType;
+  format: CompetitionFormat;
+  startDate: Date;
+  endDate?: Date;
+  pricePerTeam: number;
+  maxTeams: number;
+  registrationDeadline?: Date;
+}
+
+export interface TeamFormData {
+  name: string;
+}
+
+export interface ScheduleConfig {
+  startDate: Date;
+  dayOfWeek: number;
+  numberOfWeeks: number;
+  courtIds: number[];
+}
