@@ -300,7 +300,6 @@ export interface Standing {
   teamName: string;
   wins: number;
   losses: number;
-  ties: number;
   points: number;
   gamesPlayed: number;
 }

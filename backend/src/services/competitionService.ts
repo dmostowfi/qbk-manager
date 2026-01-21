@@ -287,8 +287,9 @@ export const competitionService = {
     }
 
     // Calculate standings from match results
+    // Note: Volleyball has no ties - every match has a winner
     const standings = competition.teams.map((team) => {
-      const stats = { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0 };
+      const stats = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
 
       competition.matches.forEach((match) => {
         if (match.homeTeamId === team.id) {
@@ -296,13 +297,12 @@ export const competitionService = {
           stats.pointsAgainst += match.awayScore!;
           if (match.homeScore! > match.awayScore!) stats.wins++;
           else if (match.homeScore! < match.awayScore!) stats.losses++;
-          else stats.ties++;
+          // Equal scores shouldn't happen in volleyball - ignore if data entry error
         } else if (match.awayTeamId === team.id) {
           stats.pointsFor += match.awayScore!;
           stats.pointsAgainst += match.homeScore!;
           if (match.awayScore! > match.homeScore!) stats.wins++;
           else if (match.awayScore! < match.homeScore!) stats.losses++;
-          else stats.ties++;
         }
       });
 
@@ -310,7 +310,7 @@ export const competitionService = {
         teamId: team.id,
         teamName: team.name,
         ...stats,
-        gamesPlayed: stats.wins + stats.losses + stats.ties,
+        gamesPlayed: stats.wins + stats.losses,
       };
     });
 

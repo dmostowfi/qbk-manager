@@ -33,7 +33,6 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
         <Text style={[styles.headerCell, styles.teamCell]}>Team</Text>
         <Text style={[styles.headerCell, styles.statCell]}>W</Text>
         <Text style={[styles.headerCell, styles.statCell]}>L</Text>
-        <Text style={[styles.headerCell, styles.statCell]}>T</Text>
         <Text style={[styles.headerCell, styles.statCell]}>GP</Text>
         <Text style={[styles.headerCell, styles.ptsCell]}>PTS</Text>
       </View>
@@ -52,7 +51,6 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
           </Text>
           <Text style={[styles.cell, styles.statCell]}>{standing.wins}</Text>
           <Text style={[styles.cell, styles.statCell]}>{standing.losses}</Text>
-          <Text style={[styles.cell, styles.statCell]}>{standing.ties}</Text>
           <Text style={[styles.cell, styles.statCell]}>{standing.gamesPlayed}</Text>
           <Text style={[styles.cell, styles.ptsCell, styles.ptsValue]}>{standing.points}</Text>
         </View>
