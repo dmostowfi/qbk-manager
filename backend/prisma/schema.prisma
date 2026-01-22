@@ -213,6 +213,7 @@ model Competition {
   maxTeams             Int               @default(8)
   status               CompetitionStatus @default(DRAFT)
   registrationDeadline DateTime?
+  stripeProductId      String?           // Stripe product for team fee payments
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 

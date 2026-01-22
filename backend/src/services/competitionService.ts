@@ -1,7 +1,9 @@
 import { PrismaClient, Prisma } from '@prisma/client';
+import Stripe from 'stripe';
 import { CompetitionFilters } from '../types/index.js';
 
 const prisma = new PrismaClient();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
 export const competitionService = {
   /**
@@ -133,6 +135,16 @@ export const competitionService = {
       throw new Error('Registration deadline must be before start date');
     }
 
+    // Create Stripe product for this competition's team fees
+    const stripeProduct = await stripe.products.create({
+      name: `${data.name} - Team Fee`,
+      description: `Team registration fee for ${data.name}`,
+      metadata: {
+        competitionType: data.type,
+        competitionFormat: data.format,
+      },
+    });
+
     return prisma.competition.create({
       data: {
         name: data.name,
@@ -144,6 +156,7 @@ export const competitionService = {
         maxTeams: data.maxTeams ?? 8,
         registrationDeadline: data.registrationDeadline,
         status: 'DRAFT', // Always start as DRAFT
+        stripeProductId: stripeProduct.id,
       },
     });
   },
