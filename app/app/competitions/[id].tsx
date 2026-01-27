@@ -16,13 +16,14 @@ import dayjs from 'dayjs';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { useCompetition } from '../../shared/hooks/useCompetition';
 import { teamsApi, competitionsApi } from '../../shared/api/services';
-import { CompetitionFormData, CompetitionStatus, Team } from '../../shared/types';
+import { CompetitionFormData, CompetitionStatus, Team, ScheduleConfig } from '../../shared/types';
 import TeamList from '../../components/competitions/TeamList';
 import TeamForm from '../../components/competitions/TeamForm';
 import TeamDetailModal from '../../components/competitions/TeamDetailModal';
 import CompetitionForm from '../../components/competitions/CompetitionForm';
 import ScheduleList from '../../components/competitions/ScheduleList';
 import StandingsTable from '../../components/competitions/StandingsTable';
+import GenerateScheduleModal from '../../components/competitions/GenerateScheduleModal';
 import { brand } from '../../constants/branding';
 
 type TabKey = 'teams' | 'schedule' | 'standings';
@@ -52,6 +53,7 @@ export default function CompetitionDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
   const { competition, teams, matches, standings, loading, error, refetch, refetchTeams } = useCompetition(id);
@@ -135,6 +137,23 @@ export default function CompetitionDetailScreen() {
       throw err;
     }
   };
+
+  const handleGenerateSchedule = async (config: ScheduleConfig) => {
+    if (!id) return;
+    try {
+      await competitionsApi.generateSchedule(id, config);
+      await refetch();
+    } catch (err: any) {
+      Alert.alert('Generation Failed', err.message || 'Could not generate schedule');
+      throw err;
+    }
+  };
+
+  // Can generate schedule if: admin + REGISTRATION status + 2+ teams + no matches yet
+  const canGenerateSchedule = canEdit &&
+    competition?.status === 'REGISTRATION' &&
+    teams.length >= 2 &&
+    matches.length === 0;
 
   // Refetch on focus
   useFocusEffect(
@@ -253,7 +272,11 @@ export default function CompetitionDetailScreen() {
           </ScrollView>
         )}
         {activeTab === 'schedule' && (
-          <ScheduleList matches={matches} />
+          <ScheduleList
+            matches={matches}
+            canGenerateSchedule={canGenerateSchedule}
+            onGenerateSchedule={() => setShowScheduleModal(true)}
+          />
         )}
         {activeTab === 'standings' && (
           <StandingsTable standings={standings} />
@@ -298,6 +321,13 @@ export default function CompetitionDetailScreen() {
         isAdmin={canEdit}
         onClose={() => setSelectedTeam(null)}
         onUpdate={refetchTeams}
+      />
+
+      {/* Generate Schedule Modal */}
+      <GenerateScheduleModal
+        visible={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        onSubmit={handleGenerateSchedule}
       />
     </View>
   );
