@@ -17,7 +17,7 @@ interface RecordScoreModalProps {
   visible: boolean;
   match: Match | null;
   onClose: () => void;
-  onSubmit: (matchId: string, homeScore: number, awayScore: number) => Promise<void>;
+  onSubmit: (matchId: string, team1Score: number, team2Score: number) => Promise<void>;
 }
 
 export default function RecordScoreModal({
@@ -26,35 +26,35 @@ export default function RecordScoreModal({
   onClose,
   onSubmit,
 }: RecordScoreModalProps) {
-  const [homeScore, setHomeScore] = useState('');
-  const [awayScore, setAwayScore] = useState('');
+  const [team1Score, setTeam1Score] = useState('');
+  const [team2Score, setTeam2Score] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (visible && match) {
-      setHomeScore(match.homeScore?.toString() ?? '');
-      setAwayScore(match.awayScore?.toString() ?? '');
+      setTeam1Score(match.team1Score?.toString() ?? '');
+      setTeam2Score(match.team2Score?.toString() ?? '');
       setError('');
     }
   }, [visible, match]);
 
   if (!match) return null;
 
-  const homeName = match.homeTeam?.name ?? 'Home Team';
-  const awayName = match.awayTeam?.name ?? 'Away Team';
+  const team1Name = match.team1?.name ?? 'Team 1';
+  const team2Name = match.team2?.name ?? 'Team 2';
   const matchDate = match.event?.startTime ? dayjs(match.event.startTime) : null;
 
   const handleSubmit = async () => {
-    const home = parseInt(homeScore, 10);
-    const away = parseInt(awayScore, 10);
+    const score1 = parseInt(team1Score, 10);
+    const score2 = parseInt(team2Score, 10);
 
-    if (isNaN(home) || home < 0) {
-      setError('Please enter a valid home score');
+    if (isNaN(score1) || score1 < 0) {
+      setError('Please enter a valid score for ' + team1Name);
       return;
     }
-    if (isNaN(away) || away < 0) {
-      setError('Please enter a valid away score');
+    if (isNaN(score2) || score2 < 0) {
+      setError('Please enter a valid score for ' + team2Name);
       return;
     }
 
@@ -62,7 +62,7 @@ export default function RecordScoreModal({
     setError('');
 
     try {
-      await onSubmit(match.id, home, away);
+      await onSubmit(match.id, score1, score2);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to record score');
@@ -103,11 +103,11 @@ export default function RecordScoreModal({
           {/* Score Entry */}
           <View style={styles.scoreEntry}>
             <View style={styles.teamScore}>
-              <Text style={styles.teamName} numberOfLines={2}>{homeName}</Text>
+              <Text style={styles.teamName} numberOfLines={2}>{team1Name}</Text>
               <TextInput
                 style={styles.scoreInput}
-                value={homeScore}
-                onChangeText={setHomeScore}
+                value={team1Score}
+                onChangeText={setTeam1Score}
                 keyboardType="number-pad"
                 placeholder="0"
                 maxLength={3}
@@ -117,11 +117,11 @@ export default function RecordScoreModal({
             <Text style={styles.vs}>vs</Text>
 
             <View style={styles.teamScore}>
-              <Text style={styles.teamName} numberOfLines={2}>{awayName}</Text>
+              <Text style={styles.teamName} numberOfLines={2}>{team2Name}</Text>
               <TextInput
                 style={styles.scoreInput}
-                value={awayScore}
-                onChangeText={setAwayScore}
+                value={team2Score}
+                onChangeText={setTeam2Score}
                 keyboardType="number-pad"
                 placeholder="0"
                 maxLength={3}

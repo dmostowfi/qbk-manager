@@ -278,21 +278,21 @@ export const competitionController = {
    * PUT /api/competitions/:id/matches/:matchId/score
    * Record the score for a match
    *
-   * BODY: { homeScore: number, awayScore: number }
+   * BODY: { team1Score: number, team2Score: number }
    */
   async recordScore(req: Request, res: Response, next: NextFunction) {
     try {
       const { matchId } = req.params;
-      const { homeScore, awayScore } = req.body;
+      const { team1Score, team2Score } = req.body;
 
-      if (homeScore === undefined || awayScore === undefined) {
-        throw createError('homeScore and awayScore are required', 400);
+      if (team1Score === undefined || team2Score === undefined) {
+        throw createError('team1Score and team2Score are required', 400);
       }
 
       const match = await scheduleService.recordScore(
         matchId,
-        parseInt(homeScore),
-        parseInt(awayScore)
+        parseInt(team1Score),
+        parseInt(team2Score)
       );
 
       res.json({ success: true, data: match });

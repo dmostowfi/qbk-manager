@@ -249,16 +249,16 @@ export interface Match {
   id: string;
   competitionId: string;
   eventId: string;
-  homeTeamId: string;
-  awayTeamId: string;
+  team1Id: string;
+  team2Id: string;
   roundNumber: number;
   isPlayoff: boolean;
-  homeScore?: number | null;
-  awayScore?: number | null;
+  team1Score?: number | null;
+  team2Score?: number | null;
   createdAt: string;
   event?: Event;
-  homeTeam?: Team;
-  awayTeam?: Team;
+  team1?: Team;
+  team2?: Team;
 }
 
 export interface TeamPayment {

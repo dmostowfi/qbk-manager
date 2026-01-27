@@ -48,8 +48,8 @@ interface ScheduleConfig {
 }
 
 interface Matchup {
-  homeTeamId: string;
-  awayTeamId: string;
+  team1Id: string;
+  team2Id: string;
 }
 
 interface ScheduledMatch extends Matchup {
@@ -125,13 +125,13 @@ export const scheduleService = {
 
       for (const match of scheduledMatches) {
         // Find team names for event title
-        const homeTeam = competition.teams.find((t) => t.id === match.homeTeamId);
-        const awayTeam = competition.teams.find((t) => t.id === match.awayTeamId);
+        const team1 = competition.teams.find((t) => t.id === match.team1Id);
+        const team2 = competition.teams.find((t) => t.id === match.team2Id);
 
         // Create Event (calendar entry)
         const event = await tx.event.create({
           data: {
-            title: `${homeTeam!.name} vs ${awayTeam!.name}`,
+            title: `${team1!.name} vs ${team2!.name}`,
             description: `${competition.name} - Round ${match.roundNumber}`,
             eventType: competition.type === 'LEAGUE' ? 'LEAGUE' : 'TOURNAMENT',
             courtId: match.courtId,
@@ -150,15 +150,15 @@ export const scheduleService = {
           data: {
             competitionId,
             eventId: event.id,
-            homeTeamId: match.homeTeamId,
-            awayTeamId: match.awayTeamId,
+            team1Id: match.team1Id,
+            team2Id: match.team2Id,
             roundNumber: match.roundNumber,
             isPlayoff: false,
           },
           include: {
             event: true,
-            homeTeam: { select: { id: true, name: true } },
-            awayTeam: { select: { id: true, name: true } },
+            team1: { select: { id: true, name: true } },
+            team2: { select: { id: true, name: true } },
           },
         });
 
@@ -184,7 +184,7 @@ export const scheduleService = {
    *
    * WHO: Admin/Staff only
    */
-  async recordScore(matchId: string, homeScore: number, awayScore: number) {
+  async recordScore(matchId: string, team1Score: number, team2Score: number) {
     const match = await prisma.match.findUnique({
       where: { id: matchId },
       include: { competition: { select: { status: true } } },
@@ -200,11 +200,11 @@ export const scheduleService = {
 
     return prisma.match.update({
       where: { id: matchId },
-      data: { homeScore, awayScore },
+      data: { team1Score, team2Score },
       include: {
         event: true,
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
+        team1: { select: { id: true, name: true } },
+        team2: { select: { id: true, name: true } },
       },
     });
   },
@@ -217,8 +217,8 @@ export const scheduleService = {
       where: { competitionId },
       include: {
         event: true,
-        homeTeam: { select: { id: true, name: true } },
-        awayTeam: { select: { id: true, name: true } },
+        team1: { select: { id: true, name: true } },
+        team2: { select: { id: true, name: true } },
       },
       orderBy: [
         { roundNumber: 'asc' },
@@ -264,30 +264,18 @@ function generateRoundRobinPairings(teamIds: string[], numberOfWeeks: number): M
     // Which round within the current cycle? (0 to roundsPerCycle-1)
     const roundInCycle = week % roundsPerCycle;
 
-    // Which cycle are we in? (0, 1, 2, ...)
-    const cycleNumber = Math.floor(week / roundsPerCycle);
-
-    // Reset team positions at the start of each cycle
-    // (We need to recalculate positions based on roundInCycle)
+    // Rotate teams for this round
     const rotatedTeams = getRotatedTeams(teamIds, roundInCycle);
 
     const matchups: Matchup[] = [];
 
     for (let i = 0; i < rotatedTeams.length / 2; i++) {
-      const team1 = rotatedTeams[i];
-      const team2 = rotatedTeams[rotatedTeams.length - 1 - i];
+      const teamA = rotatedTeams[i];
+      const teamB = rotatedTeams[rotatedTeams.length - 1 - i];
 
       // Skip matches involving BYE
-      if (team1 !== 'BYE' && team2 !== 'BYE') {
-        // Alternate home/away based on week AND cycle
-        // This ensures teams swap home/away when they replay each other
-        const homeAwayFlip = (week + cycleNumber) % 2 === 0;
-
-        if (homeAwayFlip) {
-          matchups.push({ homeTeamId: team1, awayTeamId: team2 });
-        } else {
-          matchups.push({ homeTeamId: team2, awayTeamId: team1 });
-        }
+      if (teamA !== 'BYE' && teamB !== 'BYE') {
+        matchups.push({ team1Id: teamA, team2Id: teamB });
       }
     }
 
@@ -376,8 +364,8 @@ function assignTimeSlotsAndCourts(
 
   // Initialize debt to 0 for all teams
   pairings.flat().forEach((matchup) => {
-    slotDebt[matchup.homeTeamId] = 0;
-    slotDebt[matchup.awayTeamId] = 0;
+    slotDebt[matchup.team1Id] = 0;
+    slotDebt[matchup.team2Id] = 0;
   });
 
   // Number of matches that can happen at each time slot
@@ -390,8 +378,8 @@ function assignTimeSlotsAndCourts(
     // Sort matchups by MAX slot debt of either team (not combined!)
     // This ensures the team with highest individual debt gets priority
     const sortedMatchups = [...weekMatchups].sort((a, b) => {
-      const maxDebtA = Math.max(slotDebt[a.homeTeamId], slotDebt[a.awayTeamId]);
-      const maxDebtB = Math.max(slotDebt[b.homeTeamId], slotDebt[b.awayTeamId]);
+      const maxDebtA = Math.max(slotDebt[a.team1Id], slotDebt[a.team2Id]);
+      const maxDebtB = Math.max(slotDebt[b.team1Id], slotDebt[b.team2Id]);
       return maxDebtB - maxDebtA; // Higher max debt gets priority for better slots
     });
 
@@ -417,8 +405,8 @@ function assignTimeSlotsAndCourts(
       // Update slot debt for both teams
       const slotWeight = SLOT_WEIGHTS[timeSlot];
       const debtChange = AVERAGE_SLOT_WEIGHT - slotWeight;
-      slotDebt[matchup.homeTeamId] += debtChange;
-      slotDebt[matchup.awayTeamId] += debtChange;
+      slotDebt[matchup.team1Id] += debtChange;
+      slotDebt[matchup.team2Id] += debtChange;
     });
   });
 

@@ -294,8 +294,8 @@ export const competitionsApi = {
     return response.data.data || [];
   },
 
-  recordScore: async (competitionId: string, matchId: string, homeScore: number, awayScore: number): Promise<Match> => {
-    const response = await api.put<ApiResponse<Match>>(`/competitions/${competitionId}/matches/${matchId}/score`, { homeScore, awayScore });
+  recordScore: async (competitionId: string, matchId: string, team1Score: number, team2Score: number): Promise<Match> => {
+    const response = await api.put<ApiResponse<Match>>(`/competitions/${competitionId}/matches/${matchId}/score`, { team1Score, team2Score });
     return response.data.data!;
   },
 

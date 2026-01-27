@@ -84,9 +84,9 @@ function MatchRow({
   match: Match;
   onPress?: (match: Match) => void;
 }) {
-  const homeName = match.homeTeam?.name ?? 'TBD';
-  const awayName = match.awayTeam?.name ?? 'TBD';
-  const hasScore = match.homeScore !== null && match.awayScore !== null;
+  const team1Name = match.team1?.name ?? 'TBD';
+  const team2Name = match.team2?.name ?? 'TBD';
+  const hasScore = match.team1Score !== null && match.team2Score !== null;
   const eventDate = match.event?.startTime ? dayjs(match.event.startTime) : null;
   const courtId = match.event?.courtId;
 
@@ -100,19 +100,19 @@ function MatchRow({
           </Text>
         )}
         <View style={styles.teamsRow}>
-          <Text style={[styles.teamName, hasScore && match.homeScore! > match.awayScore! && styles.winner]}>
-            {homeName}
+          <Text style={[styles.teamName, hasScore && match.team1Score! > match.team2Score! && styles.winner]}>
+            {team1Name}
           </Text>
           <Text style={styles.vs}>vs</Text>
-          <Text style={[styles.teamName, hasScore && match.awayScore! > match.homeScore! && styles.winner]}>
-            {awayName}
+          <Text style={[styles.teamName, hasScore && match.team2Score! > match.team1Score! && styles.winner]}>
+            {team2Name}
           </Text>
         </View>
       </View>
       {hasScore ? (
         <View style={styles.scoreBox}>
           <Text style={styles.score}>
-            {match.homeScore} - {match.awayScore}
+            {match.team1Score} - {match.team2Score}
           </Text>
         </View>
       ) : (

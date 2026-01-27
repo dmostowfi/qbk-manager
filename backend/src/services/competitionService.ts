@@ -84,8 +84,8 @@ export const competitionService = {
         matches: {
           include: {
             event: true, // Get the Event for date/time/court
-            homeTeam: { select: { id: true, name: true } },
-            awayTeam: { select: { id: true, name: true } },
+            team1: { select: { id: true, name: true } },
+            team2: { select: { id: true, name: true } },
           },
           orderBy: [
             { roundNumber: 'asc' },
@@ -282,14 +282,14 @@ export const competitionService = {
         teams: { select: { id: true, name: true } },
         matches: {
           where: {
-            homeScore: { not: null }, // Only completed matches
-            awayScore: { not: null },
+            team1Score: { not: null }, // Only completed matches
+            team2Score: { not: null },
           },
           select: {
-            homeTeamId: true,
-            awayTeamId: true,
-            homeScore: true,
-            awayScore: true,
+            team1Id: true,
+            team2Id: true,
+            team1Score: true,
+            team2Score: true,
           },
         },
       },
@@ -305,17 +305,17 @@ export const competitionService = {
       const stats = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
 
       competition.matches.forEach((match) => {
-        if (match.homeTeamId === team.id) {
-          stats.pointsFor += match.homeScore!;
-          stats.pointsAgainst += match.awayScore!;
-          if (match.homeScore! > match.awayScore!) stats.wins++;
-          else if (match.homeScore! < match.awayScore!) stats.losses++;
+        if (match.team1Id === team.id) {
+          stats.pointsFor += match.team1Score!;
+          stats.pointsAgainst += match.team2Score!;
+          if (match.team1Score! > match.team2Score!) stats.wins++;
+          else if (match.team1Score! < match.team2Score!) stats.losses++;
           // Equal scores shouldn't happen in volleyball - ignore if data entry error
-        } else if (match.awayTeamId === team.id) {
-          stats.pointsFor += match.awayScore!;
-          stats.pointsAgainst += match.homeScore!;
-          if (match.awayScore! > match.homeScore!) stats.wins++;
-          else if (match.awayScore! < match.homeScore!) stats.losses++;
+        } else if (match.team2Id === team.id) {
+          stats.pointsFor += match.team2Score!;
+          stats.pointsAgainst += match.team1Score!;
+          if (match.team2Score! > match.team1Score!) stats.wins++;
+          else if (match.team2Score! < match.team1Score!) stats.losses++;
         }
       });
 
