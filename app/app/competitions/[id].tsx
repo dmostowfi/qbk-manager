@@ -326,6 +326,7 @@ export default function CompetitionDetailScreen() {
       {/* Generate Schedule Modal */}
       <GenerateScheduleModal
         visible={showScheduleModal}
+        competition={competition}
         onClose={() => setShowScheduleModal(false)}
         onSubmit={handleGenerateSchedule}
       />

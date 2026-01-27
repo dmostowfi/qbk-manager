@@ -150,6 +150,13 @@ export default function CompetitionForm({
       return;
     }
 
+    // For leagues, ensure end date is same day of week as start date
+    if (type === 'LEAGUE' && endDate && endDate.getDay() !== startDate.getDay()) {
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      setError(`End date must be a ${days[startDate.getDay()]} (same day as start date)`);
+      return;
+    }
+
     if (registrationDeadline && registrationDeadline > startDate) {
       setError('Registration deadline must be before start date');
       return;

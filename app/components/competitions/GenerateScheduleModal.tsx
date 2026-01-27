@@ -10,59 +10,47 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Picker } from '@react-native-picker/picker';
-import { ScheduleConfig } from '../../shared/types';
+import { ScheduleConfig, Competition } from '../../shared/types';
 import { brand } from '../../constants/branding';
 
 interface GenerateScheduleModalProps {
   visible: boolean;
+  competition: Competition | null;
   onClose: () => void;
   onSubmit: (config: ScheduleConfig) => Promise<void>;
 }
 
-const daysOfWeek = [
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
-];
+const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function GenerateScheduleModal({
   visible,
+  competition,
   onClose,
   onSubmit,
 }: GenerateScheduleModalProps) {
-  const [startDate, setStartDate] = useState<Date>(new Date());
-  const [dayOfWeek, setDayOfWeek] = useState(3); // Wednesday
-  const [numberOfWeeks, setNumberOfWeeks] = useState('8');
   const [courtIds, setCourtIds] = useState('1,2,3');
+  const [numberOfWeeksOverride, setNumberOfWeeksOverride] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Derive values from competition
+  const startDate = competition ? new Date(competition.startDate) : new Date();
+  const endDate = competition?.endDate ? new Date(competition.endDate) : null;
+  const dayOfWeek = startDate.getDay();
+  const dayName = daysOfWeek[dayOfWeek];
+
+  // Calculate number of weeks from dates, or use override
+  const calculatedWeeks = endDate
+    ? Math.ceil((endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
+    : null;
 
   useEffect(() => {
     if (visible) {
-      // Reset to defaults
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      setStartDate(nextWeek);
-      setDayOfWeek(3);
-      setNumberOfWeeks('8');
       setCourtIds('1,2,3');
+      setNumberOfWeeksOverride(calculatedWeeks ? '' : '8');
       setError('');
     }
-  }, [visible]);
-
-  const handleDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setStartDate(selectedDate);
-    }
-  };
+  }, [visible, calculatedWeeks]);
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -74,7 +62,8 @@ export default function GenerateScheduleModal({
   };
 
   const handleSubmit = async () => {
-    const weeks = parseInt(numberOfWeeks, 10);
+    // Use calculated weeks if available, otherwise use override
+    const weeks = calculatedWeeks ?? parseInt(numberOfWeeksOverride, 10);
     if (isNaN(weeks) || weeks < 1 || weeks > 52) {
       setError('Number of weeks must be between 1 and 52');
       return;
@@ -131,76 +120,38 @@ export default function GenerateScheduleModal({
 
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
-              This will create Events and Matches for a round-robin schedule where each team plays every other team.
+              This will create a round-robin schedule where each team plays every other team.
             </Text>
           </View>
 
+          {/* Derived from competition - read only */}
           <Text style={styles.label}>Start Date</Text>
-          {Platform.OS === 'web' ? (
-            <input
-              type="date"
-              value={startDate.toISOString().split('T')[0]}
-              onChange={(e) => {
-                if (e.target.value) {
-                  const [year, month, day] = e.target.value.split('-').map(Number);
-                  const newDate = new Date(startDate);
-                  newDate.setFullYear(year, month - 1, day);
-                  setStartDate(newDate);
-                }
-              }}
-              style={{
-                padding: 14,
-                fontSize: 15,
-                border: 'none',
-                borderRadius: 10,
-                marginBottom: 20,
-                backgroundColor: brand.colors.surface,
-                color: brand.colors.text,
-                width: '100%',
-                boxSizing: 'border-box',
-                outline: 'none',
-              } as any}
-            />
-          ) : (
-            <>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.dateText}>{formatDate(startDate)}</Text>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={startDate}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={handleDateChange}
-                />
-              )}
-            </>
-          )}
+          <View style={styles.readOnlyField}>
+            <Text style={styles.readOnlyText}>{formatDate(startDate)}</Text>
+          </View>
 
-          <Text style={styles.label}>Day of Week</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={dayOfWeek}
-              onValueChange={(value) => setDayOfWeek(value)}
-              style={styles.picker}
-            >
-              {daysOfWeek.map((day) => (
-                <Picker.Item key={day.value} label={day.label} value={day.value} />
-              ))}
-            </Picker>
+          <Text style={styles.label}>Game Day</Text>
+          <View style={styles.readOnlyField}>
+            <Text style={styles.readOnlyText}>{dayName}s</Text>
           </View>
 
           <Text style={styles.label}>Number of Weeks</Text>
-          <TextInput
-            style={styles.input}
-            value={numberOfWeeks}
-            onChangeText={setNumberOfWeeks}
-            keyboardType="number-pad"
-            placeholder="8"
-          />
+          {calculatedWeeks ? (
+            <View style={styles.readOnlyField}>
+              <Text style={styles.readOnlyText}>{calculatedWeeks} weeks</Text>
+              <Text style={styles.readOnlySubtext}>
+                (based on competition end date)
+              </Text>
+            </View>
+          ) : (
+            <TextInput
+              style={styles.input}
+              value={numberOfWeeksOverride}
+              onChangeText={setNumberOfWeeksOverride}
+              keyboardType="number-pad"
+              placeholder="8"
+            />
+          )}
 
           <Text style={styles.label}>Court IDs (comma-separated)</Text>
           <TextInput
@@ -285,26 +236,22 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: brand.colors.text,
   },
-  dateButton: {
+  readOnlyField: {
     backgroundColor: brand.colors.surface,
     borderRadius: 10,
     padding: 14,
     marginBottom: 20,
+    opacity: 0.8,
   },
-  dateText: {
+  readOnlyText: {
     fontSize: 15,
     color: brand.colors.text,
   },
-  pickerContainer: {
-    backgroundColor: brand.colors.surface,
-    borderRadius: 10,
-    marginBottom: 20,
-    overflow: 'hidden',
+  readOnlySubtext: {
+    fontSize: 12,
+    color: brand.colors.textMuted,
+    marginTop: 4,
   },
-  picker: {
-    height: 50,
-    backgroundColor: 'transparent',
-  } as any,
   hint: {
     fontSize: 13,
     color: brand.colors.textMuted,
