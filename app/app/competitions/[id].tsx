@@ -16,7 +16,7 @@ import dayjs from 'dayjs';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { useCompetition } from '../../shared/hooks/useCompetition';
 import { teamsApi, competitionsApi } from '../../shared/api/services';
-import { CompetitionFormData, CompetitionStatus, Team, ScheduleConfig } from '../../shared/types';
+import { CompetitionFormData, CompetitionStatus, Team, ScheduleConfig, Match } from '../../shared/types';
 import TeamList from '../../components/competitions/TeamList';
 import TeamForm from '../../components/competitions/TeamForm';
 import TeamDetailModal from '../../components/competitions/TeamDetailModal';
@@ -24,6 +24,7 @@ import CompetitionForm from '../../components/competitions/CompetitionForm';
 import ScheduleList from '../../components/competitions/ScheduleList';
 import StandingsTable from '../../components/competitions/StandingsTable';
 import GenerateScheduleModal from '../../components/competitions/GenerateScheduleModal';
+import RecordScoreModal from '../../components/competitions/RecordScoreModal';
 import { brand } from '../../constants/branding';
 
 type TabKey = 'teams' | 'schedule' | 'standings';
@@ -54,7 +55,9 @@ export default function CompetitionDetailScreen() {
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showScoreModal, setShowScoreModal] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   const { competition, teams, matches, standings, loading, error, refetch, refetchTeams } = useCompetition(id);
 
@@ -154,6 +157,25 @@ export default function CompetitionDetailScreen() {
     competition?.status === 'REGISTRATION' &&
     teams.length >= 2 &&
     matches.length === 0;
+
+  // Can record scores if: admin/staff + ACTIVE status
+  const canRecordScore = canEdit && competition?.status === 'ACTIVE';
+
+  const handleRecordScore = (match: Match) => {
+    setSelectedMatch(match);
+    setShowScoreModal(true);
+  };
+
+  const handleScoreSubmit = async (matchId: string, team1Score: number, team2Score: number) => {
+    if (!id) return;
+    try {
+      await competitionsApi.recordScore(id, matchId, team1Score, team2Score);
+      await refetch();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to record score');
+      throw err;
+    }
+  };
 
   // Refetch on focus
   useFocusEffect(
@@ -276,6 +298,8 @@ export default function CompetitionDetailScreen() {
             matches={matches}
             canGenerateSchedule={canGenerateSchedule}
             onGenerateSchedule={() => setShowScheduleModal(true)}
+            canRecordScore={canRecordScore}
+            onRecordScore={handleRecordScore}
           />
         )}
         {activeTab === 'standings' && (
@@ -329,6 +353,17 @@ export default function CompetitionDetailScreen() {
         competition={competition}
         onClose={() => setShowScheduleModal(false)}
         onSubmit={handleGenerateSchedule}
+      />
+
+      {/* Record Score Modal */}
+      <RecordScoreModal
+        visible={showScoreModal}
+        match={selectedMatch}
+        onClose={() => {
+          setShowScoreModal(false);
+          setSelectedMatch(null);
+        }}
+        onSubmit={handleScoreSubmit}
       />
     </View>
   );

@@ -9,6 +9,8 @@ interface ScheduleListProps {
   onMatchPress?: (match: Match) => void;
   canGenerateSchedule?: boolean;
   onGenerateSchedule?: () => void;
+  canRecordScore?: boolean;
+  onRecordScore?: (match: Match) => void;
 }
 
 interface MatchSection {
@@ -16,7 +18,7 @@ interface MatchSection {
   data: Match[];
 }
 
-export default function ScheduleList({ matches, onMatchPress, canGenerateSchedule, onGenerateSchedule }: ScheduleListProps) {
+export default function ScheduleList({ matches, onMatchPress, canGenerateSchedule, onGenerateSchedule, canRecordScore, onRecordScore }: ScheduleListProps) {
   if (matches.length === 0) {
     return (
       <View style={styles.empty}>
@@ -70,7 +72,7 @@ export default function ScheduleList({ matches, onMatchPress, canGenerateSchedul
           <Text style={styles.sectionTitle}>{section.title}</Text>
         </View>
       )}
-      renderItem={({ item }) => <MatchRow match={item} onPress={onMatchPress} />}
+      renderItem={({ item }) => <MatchRow match={item} onPress={onMatchPress} canRecordScore={canRecordScore} onRecordScore={onRecordScore} />}
       contentContainerStyle={styles.list}
       stickySectionHeadersEnabled={false}
     />
@@ -80,15 +82,25 @@ export default function ScheduleList({ matches, onMatchPress, canGenerateSchedul
 function MatchRow({
   match,
   onPress,
+  canRecordScore,
+  onRecordScore,
 }: {
   match: Match;
   onPress?: (match: Match) => void;
+  canRecordScore?: boolean;
+  onRecordScore?: (match: Match) => void;
 }) {
   const team1Name = match.team1?.name ?? 'TBD';
   const team2Name = match.team2?.name ?? 'TBD';
   const hasScore = match.team1Score !== null && match.team2Score !== null;
   const eventDate = match.event?.startTime ? dayjs(match.event.startTime) : null;
   const courtId = match.event?.courtId;
+
+  const handleScorePress = () => {
+    if (onRecordScore) {
+      onRecordScore(match);
+    }
+  };
 
   return (
     <View style={styles.matchRow}>
@@ -110,11 +122,24 @@ function MatchRow({
         </View>
       </View>
       {hasScore ? (
-        <View style={styles.scoreBox}>
-          <Text style={styles.score}>
-            {match.team1Score} - {match.team2Score}
-          </Text>
-        </View>
+        canRecordScore && onRecordScore ? (
+          <TouchableOpacity style={styles.scoreBox} onPress={handleScorePress}>
+            <Text style={styles.score}>
+              {match.team1Score} - {match.team2Score}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.scoreBox}>
+            <Text style={styles.score}>
+              {match.team1Score} - {match.team2Score}
+            </Text>
+          </View>
+        )
+      ) : canRecordScore && onRecordScore ? (
+        <TouchableOpacity style={styles.recordButton} onPress={handleScorePress}>
+          <FontAwesome name="pencil" size={12} color={brand.colors.primary} />
+          <Text style={styles.recordButtonText}>Score</Text>
+        </TouchableOpacity>
       ) : (
         <View style={styles.pendingBox}>
           <Text style={styles.pendingText}>TBD</Text>
@@ -229,5 +254,19 @@ const styles = StyleSheet.create({
   pendingText: {
     fontSize: 12,
     color: brand.colors.textMuted,
+  },
+  recordButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: brand.sidebar.activeBackground,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 6,
+  },
+  recordButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: brand.colors.primary,
   },
 });
