@@ -67,6 +67,7 @@ export default function TabLayout() {
 
   const navItems = [
     { icon: 'calendar' as const, label: 'Events', href: '/' },
+    { icon: 'trophy' as const, label: 'Competitions', href: '/competitions' },
     ...(canViewPlayers ? [{ icon: 'users' as const, label: 'Players', href: '/players' }] : []),
     ...(canViewMembership ? [{ icon: 'credit-card' as const, label: 'Membership', href: '/membership' }] : []),
     { icon: 'user' as const, label: 'Profile', href: '/profile' },

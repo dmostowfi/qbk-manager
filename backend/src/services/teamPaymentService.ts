@@ -132,7 +132,7 @@ export const teamPaymentService = {
     const team = await prisma.team.findUnique({
       where: { id: teamId },
       include: {
-        competition: { select: { id: true, name: true, pricePerTeam: true, status: true } },
+        competition: { select: { id: true, name: true, pricePerTeam: true, status: true, stripeProductId: true } },
         roster: { select: { playerId: true } },
         captain: { select: { id: true } },
       },
@@ -222,27 +222,39 @@ export const teamPaymentService = {
       });
     }
 
-    // Create Stripe checkout session with custom price
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
+    // Build price_data - use existing Stripe product if available for better reporting
+    const priceData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData = {
+      currency: 'usd',
+      unit_amount: Math.round(amount * 100), // Stripe uses cents
+      ...(team.competition.stripeProductId
+        ? { product: team.competition.stripeProductId }
+        : {
             product_data: {
               name: `${team.competition.name} - Team Fee`,
               description: paymentType === 'FULL'
                 ? `Full team payment for ${team.name}`
                 : `Your share for team ${team.name}`,
             },
-            unit_amount: Math.round(amount * 100), // Stripe uses cents
-          },
+          }),
+    };
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      line_items: [
+        {
+          price_data: priceData,
           quantity: 1,
         },
       ],
       mode: 'payment',
       success_url: `${APP_URL}/competitions/${team.competition.id}/teams/${teamId}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/competitions/${team.competition.id}/teams/${teamId}`,
+      payment_intent_data: {
+        description: paymentType === 'FULL'
+          ? `Full team payment for ${team.name}`
+          : `${team.name} - Player share`,
+      },
       metadata: {
         type: 'team_payment', // Used by webhook to identify this payment type
         teamId,

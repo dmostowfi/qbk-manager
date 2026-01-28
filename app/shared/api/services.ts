@@ -1,5 +1,22 @@
 import axios from 'axios';
-import { Event, EventFormData, EventFilters, ApiResponse, Player, Enrollment, UserProfile, Product } from '../types';
+import {
+  Event,
+  EventFormData,
+  EventFilters,
+  ApiResponse,
+  Player,
+  Enrollment,
+  UserProfile,
+  Product,
+  Competition,
+  CompetitionFilters,
+  CompetitionFormData,
+  Team,
+  Match,
+  Standing,
+  TeamPaymentStatusResponse,
+  ScheduleConfig,
+} from '../types';
 
 export interface PlayerFilters {
   membershipType?: string;
@@ -38,6 +55,20 @@ export const setAuthToken = (token: string | null) => {
     delete api.defaults.headers.common['Authorization'];
   }
 };
+
+// Response interceptor: extract backend error messages
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Extract the actual error message from the backend response
+    if (error.response?.data?.error) {
+      error.message = error.response.data.error;
+    } else if (error.response?.data?.message) {
+      error.message = error.response.data.message;
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Events API
 export const eventsApi = {
@@ -173,6 +204,11 @@ export const meApi = {
     const response = await api.post<ApiResponse<{ agreementType: string; signedAt: string }>>('/me/sign', { agreementType });
     return response.data.data!;
   },
+
+  getTeams: async (): Promise<Team[]> => {
+    const response = await api.get<ApiResponse<Team[]>>('/me/teams');
+    return response.data.data || [];
+  },
 };
 
 // Products API (Stripe products)
@@ -188,6 +224,126 @@ export const checkoutApi = {
   createSession: async (priceId: string): Promise<{ url: string }> => {
     const response = await api.post<{ url: string }>('/checkout/session', { priceId });
     return response.data;
+  },
+};
+
+// Competitions API
+export const competitionsApi = {
+  getAll: async (filters?: CompetitionFilters): Promise<Competition[]> => {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const response = await api.get<ApiResponse<Competition[]>>(`/competitions?${params}`);
+    return response.data.data || [];
+  },
+
+  getById: async (id: string): Promise<Competition> => {
+    const response = await api.get<ApiResponse<Competition>>(`/competitions/${id}`);
+    return response.data.data!;
+  },
+
+  create: async (data: CompetitionFormData): Promise<Competition> => {
+    const payload = {
+      ...data,
+      startDate: data.startDate.toISOString(),
+      endDate: data.endDate?.toISOString(),
+      registrationDeadline: data.registrationDeadline?.toISOString(),
+    };
+    const response = await api.post<ApiResponse<Competition>>('/competitions', payload);
+    return response.data.data!;
+  },
+
+  update: async (id: string, data: Partial<CompetitionFormData>): Promise<Competition> => {
+    const payload = {
+      ...data,
+      ...(data.startDate && { startDate: data.startDate.toISOString() }),
+      ...(data.endDate && { endDate: data.endDate.toISOString() }),
+      ...(data.registrationDeadline && { registrationDeadline: data.registrationDeadline.toISOString() }),
+    };
+    const response = await api.put<ApiResponse<Competition>>(`/competitions/${id}`, payload);
+    return response.data.data!;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/competitions/${id}`);
+  },
+
+  updateStatus: async (id: string, status: string): Promise<Competition> => {
+    const response = await api.put<ApiResponse<Competition>>(`/competitions/${id}/status`, { status });
+    return response.data.data!;
+  },
+
+  generateSchedule: async (id: string, config: ScheduleConfig): Promise<{ matchesCreated: number; matches: Match[] }> => {
+    const response = await api.post<ApiResponse<{ matchesCreated: number; matches: Match[] }>>(`/competitions/${id}/schedule`, config);
+    return response.data.data!;
+  },
+
+  getMatches: async (id: string): Promise<Match[]> => {
+    const response = await api.get<ApiResponse<Match[]>>(`/competitions/${id}/matches`);
+    return response.data.data || [];
+  },
+
+  recordScore: async (competitionId: string, matchId: string, team1Score: number, team2Score: number): Promise<Match> => {
+    const response = await api.put<ApiResponse<Match>>(`/competitions/${competitionId}/matches/${matchId}/score`, { team1Score, team2Score });
+    return response.data.data!;
+  },
+
+  getStandings: async (id: string): Promise<Standing[]> => {
+    const response = await api.get<ApiResponse<Standing[]>>(`/competitions/${id}/standings`);
+    return response.data.data || [];
+  },
+};
+
+// Teams API
+export const teamsApi = {
+  getByCompetition: async (competitionId: string): Promise<Team[]> => {
+    const response = await api.get<ApiResponse<Team[]>>(`/competitions/${competitionId}/teams`);
+    return response.data.data || [];
+  },
+
+  getById: async (competitionId: string, teamId: string): Promise<Team> => {
+    const response = await api.get<ApiResponse<Team>>(`/competitions/${competitionId}/teams/${teamId}`);
+    return response.data.data!;
+  },
+
+  register: async (competitionId: string, data: { name: string }): Promise<Team> => {
+    const response = await api.post<ApiResponse<Team>>(`/competitions/${competitionId}/teams`, data);
+    return response.data.data!;
+  },
+
+  addToRoster: async (competitionId: string, teamId: string, playerId: string): Promise<Team> => {
+    const response = await api.post<ApiResponse<Team>>(`/competitions/${competitionId}/teams/${teamId}/roster`, { playerId });
+    return response.data.data!;
+  },
+
+  removeFromRoster: async (competitionId: string, teamId: string, playerId: string): Promise<Team> => {
+    const response = await api.delete<ApiResponse<Team>>(`/competitions/${competitionId}/teams/${teamId}/roster/${playerId}`);
+    return response.data.data!;
+  },
+
+  validateRoster: async (competitionId: string, teamId: string): Promise<{ valid: boolean; errors: string[] }> => {
+    const response = await api.get<ApiResponse<{ valid: boolean; errors: string[] }>>(`/competitions/${competitionId}/teams/${teamId}/validate`);
+    return response.data.data!;
+  },
+
+  searchPlayersForRoster: async (competitionId: string, teamId: string, search: string): Promise<Player[]> => {
+    const response = await api.get<ApiResponse<Player[]>>(`/competitions/${competitionId}/teams/${teamId}/roster/search?search=${encodeURIComponent(search)}`);
+    return response.data.data || [];
+  },
+
+  getPaymentStatus: async (competitionId: string, teamId: string): Promise<TeamPaymentStatusResponse> => {
+    const response = await api.get<ApiResponse<TeamPaymentStatusResponse>>(`/competitions/${competitionId}/teams/${teamId}/payments`);
+    return response.data.data!;
+  },
+
+  createCheckout: async (competitionId: string, teamId: string, paymentType: 'FULL' | 'SPLIT'): Promise<{ url: string; amount: number }> => {
+    const response = await api.post<ApiResponse<{ url: string; amount: number }>>(`/competitions/${competitionId}/teams/${teamId}/checkout`, { paymentType });
+    return response.data.data!;
   },
 };
 
