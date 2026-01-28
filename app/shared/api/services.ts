@@ -279,13 +279,7 @@ export const competitionsApi = {
   },
 
   generateSchedule: async (id: string, config: ScheduleConfig): Promise<{ matchesCreated: number; matches: Match[] }> => {
-    const payload = {
-      startDate: config.startDate.toISOString(),
-      dayOfWeek: config.dayOfWeek,
-      numberOfWeeks: config.numberOfWeeks,
-      courtIds: config.courtIds,
-    };
-    const response = await api.post<ApiResponse<{ matchesCreated: number; matches: Match[] }>>(`/competitions/${id}/schedule`, payload);
+    const response = await api.post<ApiResponse<{ matchesCreated: number; matches: Match[] }>>(`/competitions/${id}/schedule`, config);
     return response.data.data!;
   },
 

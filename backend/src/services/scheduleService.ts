@@ -41,10 +41,8 @@ const AVERAGE_SLOT_WEIGHT = 2.5;
 
 interface ScheduleConfig {
   competitionId: string;
-  startDate: Date;           // First game date
-  dayOfWeek: number;         // 0=Sun, 1=Mon, ..., 6=Sat (for leagues)
-  numberOfWeeks: number;     // How many weeks the league runs
   courtIds: number[];        // Available courts (e.g., [1, 2, 3])
+  numberOfWeeks?: number;    // Optional override (required if competition has no endDate)
 }
 
 interface Matchup {
@@ -70,7 +68,7 @@ export const scheduleService = {
    * 4. Create Event and Match records
    */
   async generateSchedule(config: ScheduleConfig) {
-    const { competitionId, startDate, dayOfWeek, numberOfWeeks, courtIds } = config;
+    const { competitionId, courtIds, numberOfWeeks: numberOfWeeksOverride } = config;
 
     // 1. Validate competition
     const competition = await prisma.competition.findUnique({
@@ -90,6 +88,21 @@ export const scheduleService = {
 
     if (competition.teams.length < 2) {
       throw new Error('Need at least 2 teams to generate schedule');
+    }
+
+    // 2. Derive schedule parameters from competition dates
+    const startDate = competition.startDate;
+    const dayOfWeek = startDate.getDay();
+
+    // Calculate numberOfWeeks from dates, or use override
+    let numberOfWeeks: number;
+    if (competition.endDate) {
+      const diffMs = competition.endDate.getTime() - startDate.getTime();
+      numberOfWeeks = Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
+    } else if (numberOfWeeksOverride) {
+      numberOfWeeks = numberOfWeeksOverride;
+    } else {
+      throw new Error('Competition has no end date - numberOfWeeks is required');
     }
 
     // Check all teams are paid and have valid rosters

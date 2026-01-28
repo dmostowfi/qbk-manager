@@ -326,8 +326,6 @@ export interface TeamFormData {
 }
 
 export interface ScheduleConfig {
-  startDate: Date;
-  dayOfWeek: number;
-  numberOfWeeks: number;
   courtIds: number[];
+  numberOfWeeks?: number;  // Required only if competition has no endDate
 }

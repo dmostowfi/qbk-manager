@@ -84,10 +84,9 @@ export default function GenerateScheduleModal({
 
     try {
       const config: ScheduleConfig = {
-        startDate,
-        dayOfWeek,
-        numberOfWeeks: weeks,
         courtIds: courts,
+        // Only include numberOfWeeks if not calculated from dates
+        ...(calculatedWeeks ? {} : { numberOfWeeks: weeks }),
       };
       await onSubmit(config);
       onClose();

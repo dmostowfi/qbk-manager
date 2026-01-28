@@ -207,11 +207,14 @@ export const competitionController = {
    * Generate the round-robin schedule for a competition
    *
    * BODY: {
-   *   startDate: string,     // First game date
-   *   dayOfWeek: number,     // 0-6 (Sun-Sat) - what day games are played
-   *   numberOfWeeks: number, // How many weeks the league runs
-   *   courtIds: number[]     // Available courts (e.g., [1, 2, 3])
+   *   courtIds: number[]       // Required: Available courts (e.g., [1, 2, 3])
+   *   numberOfWeeks?: number   // Optional: Override if competition has no endDate
    * }
+   *
+   * Schedule parameters are derived from the competition:
+   * - startDate: from competition.startDate
+   * - dayOfWeek: from competition.startDate.getDay()
+   * - numberOfWeeks: calculated from startDate to endDate (or use override)
    *
    * EXAMPLE with 8 teams, 8 weeks, 3 courts:
    * - 4 matches per week (each team plays once)
@@ -223,27 +226,21 @@ export const competitionController = {
   async generateSchedule(req: Request, res: Response, next: NextFunction) {
     try {
       const competitionId = req.params.id;
-      const { startDate, dayOfWeek, numberOfWeeks, courtIds } = req.body;
+      const { courtIds, numberOfWeeks } = req.body;
 
       // Validate required fields
-      if (!startDate || dayOfWeek === undefined || !numberOfWeeks || !courtIds || !Array.isArray(courtIds)) {
-        throw createError('Missing required fields: startDate, dayOfWeek, numberOfWeeks, courtIds (array)', 400);
+      if (!courtIds || !Array.isArray(courtIds)) {
+        throw createError('Missing required field: courtIds (array)', 400);
       }
 
       if (courtIds.length === 0) {
         throw createError('At least one court is required', 400);
       }
 
-      if (numberOfWeeks < 1) {
-        throw createError('numberOfWeeks must be at least 1', 400);
-      }
-
       const result = await scheduleService.generateSchedule({
         competitionId,
-        startDate: new Date(startDate),
-        dayOfWeek: parseInt(dayOfWeek),
-        numberOfWeeks: parseInt(numberOfWeeks),
         courtIds: courtIds.map((c: string | number) => parseInt(String(c))),
+        numberOfWeeks: numberOfWeeks ? parseInt(numberOfWeeks) : undefined,
       });
 
       res.status(201).json({ success: true, data: result });
