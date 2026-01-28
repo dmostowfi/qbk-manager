@@ -6,9 +6,8 @@ import { brand } from '../../constants/branding';
 
 interface ScheduleListProps {
   matches: Match[];
+  teams?: { id: string; name: string }[];
   onMatchPress?: (match: Match) => void;
-  canGenerateSchedule?: boolean;
-  onGenerateSchedule?: () => void;
   canRecordScore?: boolean;
   onRecordScore?: (match: Match) => void;
 }
@@ -16,23 +15,16 @@ interface ScheduleListProps {
 interface MatchSection {
   title: string;
   data: Match[];
+  byeTeam?: string;
 }
 
-export default function ScheduleList({ matches, onMatchPress, canGenerateSchedule, onGenerateSchedule, canRecordScore, onRecordScore }: ScheduleListProps) {
+export default function ScheduleList({ matches, teams, onMatchPress, canRecordScore, onRecordScore }: ScheduleListProps) {
   if (matches.length === 0) {
     return (
       <View style={styles.empty}>
         <FontAwesome name="calendar" size={40} color={brand.colors.border} />
         <Text style={styles.emptyText}>No schedule generated yet</Text>
-        {canGenerateSchedule && onGenerateSchedule && (
-          <>
-            <Text style={styles.emptySubtext}>Generate a round-robin schedule for all teams</Text>
-            <TouchableOpacity style={styles.generateButton} onPress={onGenerateSchedule}>
-              <FontAwesome name="magic" size={16} color="#fff" />
-              <Text style={styles.generateButtonText}>Generate Schedule</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <Text style={styles.emptySubtext}>Use the "Generate Schedule" button above to create matchups</Text>
       </View>
     );
   }
@@ -53,8 +45,23 @@ export default function ScheduleList({ matches, onMatchPress, canGenerateSchedul
   Array.from(grouped.entries())
     .sort(([a], [b]) => a - b)
     .forEach(([round, roundMatches]) => {
+      // Find bye team (team not playing this round)
+      let byeTeam: string | undefined;
+      if (teams && teams.length > 0) {
+        const teamsPlayingThisRound = new Set<string>();
+        roundMatches.forEach((match) => {
+          if (match.team1Id) teamsPlayingThisRound.add(match.team1Id);
+          if (match.team2Id) teamsPlayingThisRound.add(match.team2Id);
+        });
+        const byeTeamObj = teams.find((t) => !teamsPlayingThisRound.has(t.id));
+        if (byeTeamObj) {
+          byeTeam = byeTeamObj.name;
+        }
+      }
+
       sections.push({
         title: `Week ${round}`,
+        byeTeam,
         data: roundMatches.sort((a, b) => {
           const dateA = a.event?.startTime ? new Date(a.event.startTime).getTime() : 0;
           const dateB = b.event?.startTime ? new Date(b.event.startTime).getTime() : 0;
@@ -70,6 +77,9 @@ export default function ScheduleList({ matches, onMatchPress, canGenerateSchedul
       renderSectionHeader={({ section }) => (
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
+          {section.byeTeam && (
+            <Text style={styles.byeText}>Bye: {section.byeTeam}</Text>
+          )}
         </View>
       )}
       renderItem={({ item }) => <MatchRow match={item} onPress={onMatchPress} canRecordScore={canRecordScore} onRecordScore={onRecordScore} />}
@@ -171,21 +181,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 16,
   },
-  generateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: brand.colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    gap: 8,
-  },
-  generateButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
   sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 4,
     marginTop: 8,
@@ -197,6 +196,11 @@ const styles = StyleSheet.create({
     color: brand.colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  byeText: {
+    fontSize: 12,
+    color: brand.colors.textMuted,
+    fontStyle: 'italic',
   },
   matchRow: {
     flexDirection: 'row',
