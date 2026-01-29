@@ -68,12 +68,13 @@ export default function CompetitionDetailScreen() {
   const canRegister = isRegistrationOpen && spotsAvailable > 0;
 
   // Get next valid status transition
+  // During REGISTRATION, "Start Competition" only appears after schedule is generated
   const getNextStatus = (current: CompetitionStatus): { status: CompetitionStatus; label: string } | null => {
     switch (current) {
       case 'DRAFT':
         return { status: 'REGISTRATION', label: 'Open Registration' };
       case 'REGISTRATION':
-        return { status: 'ACTIVE', label: 'Start Competition' };
+        return matches.length > 0 ? { status: 'ACTIVE', label: 'Start Competition' } : null;
       case 'ACTIVE':
         return { status: 'COMPLETED', label: 'Mark Complete' };
       default:
@@ -304,7 +305,6 @@ export default function CompetitionDetailScreen() {
         {activeTab === 'schedule' && (
           <ScheduleList
             matches={matches}
-            teams={teams.map((t) => ({ id: t.id, name: t.name }))}
             canRecordScore={canRecordScore}
             onRecordScore={handleRecordScore}
           />

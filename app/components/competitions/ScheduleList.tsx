@@ -6,7 +6,6 @@ import { brand } from '../../constants/branding';
 
 interface ScheduleListProps {
   matches: Match[];
-  teams?: { id: string; name: string }[];
   onMatchPress?: (match: Match) => void;
   canRecordScore?: boolean;
   onRecordScore?: (match: Match) => void;
@@ -15,10 +14,9 @@ interface ScheduleListProps {
 interface MatchSection {
   title: string;
   data: Match[];
-  byeTeam?: string;
 }
 
-export default function ScheduleList({ matches, teams, onMatchPress, canRecordScore, onRecordScore }: ScheduleListProps) {
+export default function ScheduleList({ matches, onMatchPress, canRecordScore, onRecordScore }: ScheduleListProps) {
   if (matches.length === 0) {
     return (
       <View style={styles.empty}>
@@ -45,23 +43,8 @@ export default function ScheduleList({ matches, teams, onMatchPress, canRecordSc
   Array.from(grouped.entries())
     .sort(([a], [b]) => a - b)
     .forEach(([round, roundMatches]) => {
-      // Find bye team (team not playing this round)
-      let byeTeam: string | undefined;
-      if (teams && teams.length > 0) {
-        const teamsPlayingThisRound = new Set<string>();
-        roundMatches.forEach((match) => {
-          if (match.team1Id) teamsPlayingThisRound.add(match.team1Id);
-          if (match.team2Id) teamsPlayingThisRound.add(match.team2Id);
-        });
-        const byeTeamObj = teams.find((t) => !teamsPlayingThisRound.has(t.id));
-        if (byeTeamObj) {
-          byeTeam = byeTeamObj.name;
-        }
-      }
-
       sections.push({
         title: `Week ${round}`,
-        byeTeam,
         data: roundMatches.sort((a, b) => {
           const dateA = a.event?.startTime ? new Date(a.event.startTime).getTime() : 0;
           const dateB = b.event?.startTime ? new Date(b.event.startTime).getTime() : 0;
@@ -77,9 +60,6 @@ export default function ScheduleList({ matches, teams, onMatchPress, canRecordSc
       renderSectionHeader={({ section }) => (
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{section.title}</Text>
-          {section.byeTeam && (
-            <Text style={styles.byeText}>Bye: {section.byeTeam}</Text>
-          )}
         </View>
       )}
       renderItem={({ item }) => <MatchRow match={item} onPress={onMatchPress} canRecordScore={canRecordScore} onRecordScore={onRecordScore} />}
@@ -182,9 +162,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 4,
     marginTop: 8,
@@ -196,11 +173,6 @@ const styles = StyleSheet.create({
     color: brand.colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  byeText: {
-    fontSize: 12,
-    color: brand.colors.textMuted,
-    fontStyle: 'italic',
   },
   matchRow: {
     flexDirection: 'row',

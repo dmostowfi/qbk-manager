@@ -107,31 +107,24 @@ export const scheduleService = {
 
     // Check all teams are paid and have valid rosters
     const requiredSize = competition.format === 'INTERMEDIATE_4S' ? 4 : 6;
-    const teamsNotReady: string[] = [];
+    let hasUnpaid = false;
+    let hasIncompleteRoster = false;
 
     for (const team of competition.teams) {
-      const issues: string[] = [];
-
-      // Check payment status
       if (team.status !== 'CONFIRMED') {
-        issues.push('unpaid');
+        hasUnpaid = true;
       }
 
-      // Check roster size
       const rosterCount = await prisma.teamRoster.count({
         where: { teamId: team.id },
       });
       if (rosterCount < requiredSize) {
-        issues.push(`needs ${requiredSize - rosterCount} more player${requiredSize - rosterCount > 1 ? 's' : ''}`);
-      }
-
-      if (issues.length > 0) {
-        teamsNotReady.push(`${team.name} (${issues.join(', ')})`);
+        hasIncompleteRoster = true;
       }
     }
 
-    if (teamsNotReady.length > 0) {
-      throw new Error(`Teams not ready: ${teamsNotReady.join('; ')}`);
+    if (hasUnpaid || hasIncompleteRoster) {
+      throw new Error(`All teams must have completed payment and a full roster of ${requiredSize} players to generate the schedule`);
     }
 
     // 2. Generate round-robin pairings for the specified number of weeks
