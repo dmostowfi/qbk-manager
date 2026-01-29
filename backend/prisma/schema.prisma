@@ -52,12 +52,33 @@ model Staff {
   updatedAt DateTime  @updatedAt
 }
 
+model Facility {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  spaces    Space[]
+}
+
+model Space {
+  id           String        @id @default(uuid())
+  facilityId   String
+  name         String
+  type         SpaceType
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  facility     Facility      @relation(fields: [facilityId], references: [id])
+  events       Event[]
+  competitions Competition[]
+}
+
 model Event {
   id                String         @id @default(uuid())
   title             String
   description       String?
   eventType         EventType
-  courtId           Int
+  spaceId           String
   startTime         DateTime
   endTime           DateTime
   maxCapacity       Int            @default(12)
@@ -70,6 +91,7 @@ model Event {
   status      EventStatus    @default(SCHEDULED)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+  space       Space          @relation(fields: [spaceId], references: [id])
   enrollments Enrollment[]
   match       Match?         // If this event is a competition match
 }
@@ -160,6 +182,18 @@ enum EventStatus {
   COMPLETED
 }
 
+enum SpaceType {
+  COURT
+  OPEN_AREA
+  GAMES
+}
+
+enum MatchType {
+  REGULAR
+  EXHIBITION
+  PLAYOFF
+}
+
 // ============== COMPETITION ENUMS ==============
 
 enum CompetitionType {
@@ -209,7 +243,9 @@ model Competition {
   format               CompetitionFormat
   startDate            DateTime
   endDate              DateTime?
+  numberOfWeeks        Int?
   pricePerTeam         Decimal           @db.Decimal(10, 2)
+  deposit              Decimal?          @db.Decimal(10, 2)
   maxTeams             Int               @default(8)
   status               CompetitionStatus @default(DRAFT)
   registrationDeadline DateTime?
@@ -220,6 +256,7 @@ model Competition {
   teams      Team[]
   freeAgents FreeAgent[]
   matches    Match[]
+  spaces     Space[]     // Courts assigned to this competition (empty = all available)
 }
 
 model Team {
@@ -232,12 +269,13 @@ model Team {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  competition Competition   @relation(fields: [competitionId], references: [id])
-  captain     Player        @relation("TeamCaptain", fields: [captainId], references: [id])
-  roster      TeamRoster[]
-  team1Matches Match[]      @relation("Team1")
-  team2Matches Match[]      @relation("Team2")
-  payments    TeamPayment[]
+  competition      Competition   @relation(fields: [competitionId], references: [id])
+  captain          Player        @relation("TeamCaptain", fields: [captainId], references: [id])
+  roster           TeamRoster[]
+  team1Matches     Match[]       @relation("Team1")
+  team2Matches     Match[]       @relation("Team2")
+  exhibitionMatches Match[]      @relation("ExhibitionFor")
+  payments         TeamPayment[]
 
   @@unique([competitionId, name])
 }
@@ -255,21 +293,23 @@ model TeamRoster {
 }
 
 model Match {
-  id            String   @id @default(uuid())
-  competitionId String
-  eventId       String   @unique // Links to Event for calendar display
-  team1Id       String
-  team2Id       String
-  roundNumber   Int      // Week number for leagues, round for tournaments
-  isPlayoff     Boolean  @default(false)
-  team1Score    Int?
-  team2Score    Int?
-  createdAt     DateTime @default(now())
+  id                   String    @id @default(uuid())
+  competitionId        String
+  eventId              String    @unique // Links to Event for calendar display
+  team1Id              String
+  team2Id              String
+  roundNumber          Int       // Week number for leagues, round for tournaments
+  matchType            MatchType @default(REGULAR)
+  exhibitionForTeamId  String?   // For EXHIBITION: the bye team whose standings this counts for
+  team1Score           Int?
+  team2Score           Int?
+  createdAt            DateTime  @default(now())
 
-  competition Competition @relation(fields: [competitionId], references: [id])
-  event       Event       @relation(fields: [eventId], references: [id])
-  team1       Team        @relation("Team1", fields: [team1Id], references: [id])
-  team2       Team        @relation("Team2", fields: [team2Id], references: [id])
+  competition      Competition @relation(fields: [competitionId], references: [id])
+  event            Event       @relation(fields: [eventId], references: [id])
+  team1            Team        @relation("Team1", fields: [team1Id], references: [id])
+  team2            Team        @relation("Team2", fields: [team2Id], references: [id])
+  exhibitionForTeam Team?      @relation("ExhibitionFor", fields: [exhibitionForTeamId], references: [id])
 
   @@index([competitionId, roundNumber])
 }
