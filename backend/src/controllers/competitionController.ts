@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import competitionService from '../services/competitionService.js';
-import scheduleService from '../services/scheduleService.js';
+import scheduleService, { calculateMaxTeams } from '../services/scheduleService.js';
 import { createError } from '../middleware/errorHandler.js';
 import { CompetitionFilters } from '../types/index.js';
 
@@ -64,9 +64,8 @@ export const competitionController = {
    */
   async create(req: Request, res: Response, next: NextFunction) {
     try {
-      const { name, type, format, startDate, endDate, pricePerTeam, maxTeams, registrationDeadline } = req.body;
+      const { name, type, format, startDate, endDate, numberOfWeeks, pricePerTeam, deposit, maxTeams, registrationDeadline, spaceIds } = req.body;
 
-      // Validate required fields (controller validates presence, service validates business rules)
       if (!name || !type || !format || !startDate || pricePerTeam === undefined) {
         throw createError('Missing required fields: name, type, format, startDate, pricePerTeam', 400);
       }
@@ -77,17 +76,18 @@ export const competitionController = {
         format,
         startDate: new Date(startDate),
         endDate: endDate ? new Date(endDate) : undefined,
+        numberOfWeeks: numberOfWeeks ? parseInt(numberOfWeeks) : undefined,
         pricePerTeam: parseFloat(pricePerTeam),
+        deposit: deposit ? parseFloat(deposit) : undefined,
         maxTeams: maxTeams ? parseInt(maxTeams) : undefined,
         registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : undefined,
+        spaceIds: spaceIds,
       });
 
-      // 201 Created for successful resource creation
       res.status(201).json({ success: true, data: competition });
     } catch (error) {
-      // Convert service errors to HTTP errors
       if (error instanceof Error) {
-        if (error.message.includes('End date') || error.message.includes('Registration deadline')) {
+        if (error.message.includes('End date') || error.message.includes('Registration deadline') || error.message.includes('Leagues must')) {
           return next(createError(error.message, 400));
         }
       }
@@ -204,45 +204,13 @@ export const competitionController = {
 
   /**
    * POST /api/competitions/:id/schedule
-   * Generate the round-robin schedule for a competition
+   * Generate the round-robin schedule for a competition.
    *
-   * BODY: {
-   *   courtIds: number[]       // Required: Available courts (e.g., [1, 2, 3])
-   *   numberOfWeeks?: number   // Optional: Override if competition has no endDate
-   * }
-   *
-   * Schedule parameters are derived from the competition:
-   * - startDate: from competition.startDate
-   * - dayOfWeek: from competition.startDate.getDay()
-   * - numberOfWeeks: calculated from startDate to endDate (or use override)
-   *
-   * EXAMPLE with 8 teams, 8 weeks, 3 courts:
-   * - 4 matches per week (each team plays once)
-   * - Week 1: 6pm Court 1, 6pm Court 2, 6pm Court 3, 7pm Court 1
-   * - Fair rotation ensures teams don't always play at 9pm
-   *
-   * WHY POST not PUT? This creates new resources (Events and Matches).
+   * No body needed — all config derived from competition record + calendar.
    */
   async generateSchedule(req: Request, res: Response, next: NextFunction) {
     try {
-      const competitionId = req.params.id;
-      const { courtIds, numberOfWeeks } = req.body;
-
-      // Validate required fields
-      if (!courtIds || !Array.isArray(courtIds)) {
-        throw createError('Missing required field: courtIds (array)', 400);
-      }
-
-      if (courtIds.length === 0) {
-        throw createError('At least one court is required', 400);
-      }
-
-      const result = await scheduleService.generateSchedule({
-        competitionId,
-        courtIds: courtIds.map((c: string | number) => parseInt(String(c))),
-        numberOfWeeks: numberOfWeeks ? parseInt(numberOfWeeks) : undefined,
-      });
-
+      const result = await scheduleService.generateSchedule(req.params.id);
       res.status(201).json({ success: true, data: result });
     } catch (error) {
       if (error instanceof Error) {
@@ -250,9 +218,48 @@ export const competitionController = {
         if (msg === 'Competition not found') {
           return next(createError(msg, 404));
         }
-        if (msg.includes('must be in REGISTRATION') || msg.includes('Need at least') || msg.includes('needs')) {
+        if (
+          msg.includes('must be in REGISTRATION') ||
+          msg.includes('Need at least') ||
+          msg.includes('must have') ||
+          msg.includes('court slots') ||
+          msg.includes('completed payment')
+        ) {
           return next(createError(msg, 400));
         }
+      }
+      next(error);
+    }
+  },
+
+  /**
+   * GET /api/competitions/max-teams
+   * Calculate maximum teams based on court availability.
+   *
+   * Query params: startDate, numberOfWeeks, spaceIds? (comma-separated)
+   */
+  async getMaxTeams(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { startDate, numberOfWeeks, spaceIds } = req.query;
+
+      if (!startDate || !numberOfWeeks) {
+        throw createError('startDate and numberOfWeeks are required', 400);
+      }
+
+      const parsedSpaceIds = spaceIds
+        ? (spaceIds as string).split(',').filter(Boolean)
+        : undefined;
+
+      const result = await calculateMaxTeams(
+        new Date(startDate as string),
+        parseInt(numberOfWeeks as string),
+        parsedSpaceIds
+      );
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('required')) {
+        return next(createError(error.message, 400));
       }
       next(error);
     }

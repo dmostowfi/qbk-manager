@@ -83,7 +83,11 @@ export const competitionService = {
         },
         matches: {
           include: {
-            event: true, // Get the Event for date/time/court
+            event: {
+              include: {
+                space: { select: { id: true, name: true } },
+              },
+            },
             team1: { select: { id: true, name: true } },
             team2: { select: { id: true, name: true } },
           },
@@ -91,6 +95,9 @@ export const competitionService = {
             { roundNumber: 'asc' },
             { event: { startTime: 'asc' } },
           ],
+        },
+        spaces: {
+          select: { id: true, name: true, type: true },
         },
         freeAgents: {
           include: {
@@ -123,9 +130,12 @@ export const competitionService = {
     format: 'INTERMEDIATE_4S' | 'RECREATIONAL_6S';
     startDate: Date;
     endDate?: Date;
+    numberOfWeeks?: number;
     pricePerTeam: number;
+    deposit?: number;
     maxTeams?: number;
     registrationDeadline?: Date;
+    spaceIds?: string[];
   }) {
     // Business validation
     if (data.endDate && data.endDate < data.startDate) {
@@ -133,6 +143,14 @@ export const competitionService = {
     }
     if (data.registrationDeadline && data.registrationDeadline > data.startDate) {
       throw new Error('Registration deadline must be before start date');
+    }
+    if (data.type === 'LEAGUE') {
+      if (!data.numberOfWeeks) {
+        throw new Error('Leagues must specify numberOfWeeks');
+      }
+      if (data.numberOfWeeks !== 6 && data.numberOfWeeks !== 8) {
+        throw new Error('Leagues must be 6 or 8 weeks');
+      }
     }
 
     // Create Stripe product for this competition's team fees
@@ -152,11 +170,16 @@ export const competitionService = {
         format: data.format,
         startDate: data.startDate,
         endDate: data.endDate,
+        numberOfWeeks: data.numberOfWeeks,
         pricePerTeam: data.pricePerTeam,
+        deposit: data.deposit,
         maxTeams: data.maxTeams ?? 8,
         registrationDeadline: data.registrationDeadline,
-        status: 'DRAFT', // Always start as DRAFT
+        status: 'DRAFT',
         stripeProductId: stripeProduct.id,
+        ...(data.spaceIds && data.spaceIds.length > 0
+          ? { spaces: { connect: data.spaceIds.map((id) => ({ id })) } }
+          : {}),
       },
     });
   },
@@ -282,14 +305,21 @@ export const competitionService = {
         teams: { select: { id: true, name: true } },
         matches: {
           where: {
-            team1Score: { not: null }, // Only completed matches
+            team1Score: { not: null },
             team2Score: { not: null },
+            // Include REGULAR matches + EXHIBITION matches (for bye team standings)
+            OR: [
+              { matchType: 'REGULAR' },
+              { matchType: 'EXHIBITION', exhibitionForTeamId: { not: null } },
+            ],
           },
           select: {
             team1Id: true,
             team2Id: true,
             team1Score: true,
             team2Score: true,
+            matchType: true,
+            exhibitionForTeamId: true,
           },
         },
       },
@@ -300,17 +330,22 @@ export const competitionService = {
     }
 
     // Calculate standings from match results
-    // Note: Volleyball has no ties - every match has a winner
+    // REGULAR matches count for both teams
+    // EXHIBITION matches only count for the exhibitionForTeamId (bye team)
     const standings = competition.teams.map((team) => {
       const stats = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
 
       competition.matches.forEach((match) => {
+        // For exhibition matches, only count for the bye team
+        if (match.matchType === 'EXHIBITION' && match.exhibitionForTeamId !== team.id) {
+          return;
+        }
+
         if (match.team1Id === team.id) {
           stats.pointsFor += match.team1Score!;
           stats.pointsAgainst += match.team2Score!;
           if (match.team1Score! > match.team2Score!) stats.wins++;
           else if (match.team1Score! < match.team2Score!) stats.losses++;
-          // Equal scores shouldn't happen in volleyball - ignore if data entry error
         } else if (match.team2Id === team.id) {
           stats.pointsFor += match.team2Score!;
           stats.pointsAgainst += match.team1Score!;

@@ -29,6 +29,10 @@ const router = Router();
 // GET /api/competitions - List all competitions (with optional filters)
 router.get('/', competitionController.getAll);
 
+// GET /api/competitions/max-teams - Calculate max teams from court availability
+// (Must be before /:id to avoid being caught by the param route)
+router.get('/max-teams', competitionController.getMaxTeams);
+
 // GET /api/competitions/:id - Get competition details
 router.get('/:id', competitionController.getById);
 

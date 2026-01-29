@@ -1,4 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import {
+  TIME_SLOTS,
+  SLOT_WEIGHTS,
+  AVERAGE_SLOT_WEIGHT,
+  MIN_TEAMS,
+  SLOTS_BY_PREFERENCE,
+  isHolidayWeek,
+} from '../config/scheduleConfig.js';
 
 const prisma = new PrismaClient();
 
@@ -9,72 +17,217 @@ const prisma = new PrismaClient();
  *
  * KEY CONCEPTS:
  *
- * 1. ROUND-ROBIN ALGORITHM
- *    - Each team plays every other team exactly once
- *    - For N teams: N-1 rounds, each round has N/2 matches
- *    - If odd number of teams, one team gets a "bye" each round
+ * 1. ROUND-ROBIN with DOUBLE HEADERS (no BYEs)
+ *    - Each team plays every other team exactly once per cycle
+ *    - Odd teams: bye team plays an EXHIBITION match instead of sitting out
+ *    - Exhibition opponent rotates fairly (fewest prior double headers)
  *
- * 2. FAIR TIME SLOT ROTATION
- *    - Slots: 6pm (best), 7pm, 8pm, 9pm (worst)
- *    - Track "slot debt" per team (accumulated bad slot assignments)
- *    - Teams with highest debt get priority for good slots
+ * 2. HOLIDAY-AWARE SCHEDULING
+ *    - Weeks that fall on/near US holidays are skipped
+ *    - Season extends until enough non-holiday weeks are found
  *
- * 3. EVENT CREATION
- *    - Each match creates an Event (appears on calendar)
- *    - Match links to Event for competition-specific data (scores, round)
+ * 3. COURT AVAILABILITY
+ *    - Courts queried from Space table (not hardcoded)
+ *    - Existing calendar events checked to avoid conflicts
+ *    - Competition can specify courts or use all available
+ *
+ * 4. FAIR TIME SLOT ROTATION
+ *    - Slots: 6pm, 7pm (best), 8pm, 9pm, 10pm (worst)
+ *    - Track "slot debt" per team for fair rotation
  */
 
-// Time slot definitions (hour of day)
-const TIME_SLOTS = [18, 19, 20, 21]; // 6pm, 7pm, 8pm, 9pm
+// ============== SHARED UTILITIES ==============
+// These functions are used by both generateSchedule() and getMaxTeams()
 
-// Slot desirability weights (higher = more desirable)
-// Used to calculate "slot debt" for fair rotation
-const SLOT_WEIGHTS: Record<number, number> = {
-  18: 4, // 6pm - most desirable
-  19: 3, // 7pm
-  20: 2, // 8pm
-  21: 1, // 9pm - least desirable
-};
+/**
+ * Calculate league dates, skipping holiday weeks.
+ *
+ * Instead of N consecutive weeks, collects weeks until N non-holiday
+ * dates are found. Also returns any holidays that were skipped.
+ */
+export function calculateRoundDates(
+  startDate: Date,
+  dayOfWeek: number,
+  numberOfWeeks: number
+): { dates: Date[]; skippedHolidays: Date[] } {
+  const dates: Date[] = [];
+  const skippedHolidays: Date[] = [];
+  const current = new Date(startDate);
 
-// Average weight (2.5) - debt is calculated relative to this
-const AVERAGE_SLOT_WEIGHT = 2.5;
+  // Adjust to the correct day of week
+  const currentDay = current.getDay();
+  const daysUntilTarget = (dayOfWeek - currentDay + 7) % 7;
+  current.setDate(current.getDate() + daysUntilTarget);
 
-interface ScheduleConfig {
-  competitionId: string;
-  courtIds: number[];        // Available courts (e.g., [1, 2, 3])
-  numberOfWeeks?: number;    // Optional override (required if competition has no endDate)
+  while (dates.length < numberOfWeeks) {
+    if (isHolidayWeek(current)) {
+      skippedHolidays.push(new Date(current));
+    } else {
+      dates.push(new Date(current));
+    }
+    current.setDate(current.getDate() + 7);
+  }
+
+  return { dates, skippedHolidays };
+}
+
+/**
+ * Query which courts are free at which time slots for each league date.
+ *
+ * If assignedSpaceIds is provided, only those courts are considered.
+ * Otherwise, all courts (Space with type COURT) are used.
+ *
+ * Returns a per-week availability map.
+ */
+export async function getCourtAvailability(
+  weekDates: Date[],
+  assignedSpaceIds?: string[]
+): Promise<WeekAvailability[]> {
+  // Get the courts to check
+  let spaceIds: string[];
+  if (assignedSpaceIds && assignedSpaceIds.length > 0) {
+    spaceIds = assignedSpaceIds;
+  } else {
+    const courts = await prisma.space.findMany({
+      where: { type: 'COURT' },
+      select: { id: true },
+    });
+    spaceIds = courts.map((c) => c.id);
+  }
+
+  const availability: WeekAvailability[] = [];
+
+  for (const date of weekDates) {
+    // Query existing non-cancelled events on these courts for this date
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const existingEvents = await prisma.event.findMany({
+      where: {
+        spaceId: { in: spaceIds },
+        startTime: { gte: dayStart, lte: dayEnd },
+        status: { not: 'CANCELLED' },
+      },
+      select: {
+        spaceId: true,
+        startTime: true,
+      },
+    });
+
+    // Build set of occupied (spaceId, hour) pairs
+    const occupied = new Set<string>();
+    for (const event of existingEvents) {
+      const hour = event.startTime.getHours();
+      occupied.add(`${event.spaceId}:${hour}`);
+    }
+
+    // For each time slot, determine which courts are free
+    const availableSlots = new Map<number, string[]>();
+    for (const slot of TIME_SLOTS) {
+      const freeCourts = spaceIds.filter((id) => !occupied.has(`${id}:${slot}`));
+      if (freeCourts.length > 0) {
+        availableSlots.set(slot, freeCourts);
+      }
+    }
+
+    availability.push({ date, availableSlots });
+  }
+
+  return availability;
+}
+
+/**
+ * Count total available court-slot combos per week, return the minimum (bottleneck).
+ * Each combo can host one match.
+ */
+export function countAvailableSlots(availability: WeekAvailability[]): {
+  minSlots: number;
+  bottleneckWeek: Date | null;
+} {
+  let minSlots = Infinity;
+  let bottleneckWeek: Date | null = null;
+
+  for (const week of availability) {
+    let weekSlots = 0;
+    for (const courts of week.availableSlots.values()) {
+      weekSlots += courts.length;
+    }
+    if (weekSlots < minSlots) {
+      minSlots = weekSlots;
+      bottleneckWeek = week.date;
+    }
+  }
+
+  return { minSlots: minSlots === Infinity ? 0 : minSlots, bottleneckWeek };
+}
+
+/**
+ * Calculate max teams a league can support based on court availability.
+ *
+ * With N teams (even): N/2 matches per week
+ * With N teams (odd): (N-1)/2 regular + 1 exhibition = (N+1)/2 matches per week
+ *
+ * So maxTeams from M available slots:
+ * - Even case: M slots -> M*2 teams
+ * - Odd case: M slots -> M*2 - 1 teams (exhibition takes one extra slot)
+ * We return M*2 (the even case, which is the maximum).
+ */
+export async function calculateMaxTeams(
+  startDate: Date,
+  numberOfWeeks: number,
+  assignedSpaceIds?: string[]
+): Promise<{ maxTeams: number; weekDates: string[]; skippedHolidays: string[] }> {
+  const dayOfWeek = startDate.getDay();
+  const { dates, skippedHolidays } = calculateRoundDates(startDate, dayOfWeek, numberOfWeeks);
+  const availability = await getCourtAvailability(dates, assignedSpaceIds);
+  const { minSlots } = countAvailableSlots(availability);
+
+  return {
+    maxTeams: minSlots * 2,
+    weekDates: dates.map((d) => d.toISOString()),
+    skippedHolidays: skippedHolidays.map((d) => d.toISOString()),
+  };
+}
+
+// ============== TYPES ==============
+
+interface WeekAvailability {
+  date: Date;
+  availableSlots: Map<number, string[]>; // timeSlot -> available spaceIds
 }
 
 interface Matchup {
   team1Id: string;
   team2Id: string;
+  matchType: 'REGULAR' | 'EXHIBITION';
+  exhibitionForTeamId?: string; // bye team ID for exhibition matches
 }
 
 interface ScheduledMatch extends Matchup {
   roundNumber: number;
   date: Date;
   startHour: number;
-  courtId: number;
+  spaceId: string;
 }
+
+// ============== MAIN SERVICE ==============
 
 export const scheduleService = {
   /**
-   * Generate a complete schedule for a competition
+   * Generate a complete schedule for a competition.
    *
-   * STEPS:
-   * 1. Validate competition is ready (REGISTRATION status, 2+ teams)
-   * 2. Generate round-robin pairings for the number of weeks
-   * 3. Assign time slots and courts fairly
-   * 4. Create Event and Match records
+   * All config is derived from the competition record + calendar.
+   * No body params needed from the client.
    */
-  async generateSchedule(config: ScheduleConfig) {
-    const { competitionId, courtIds, numberOfWeeks: numberOfWeeksOverride } = config;
-
-    // 1. Validate competition
+  async generateSchedule(competitionId: string) {
+    // 1. Load competition with teams and assigned spaces
     const competition = await prisma.competition.findUnique({
       where: { id: competitionId },
       include: {
         teams: { select: { id: true, name: true, status: true } },
+        spaces: { select: { id: true } },
       },
     });
 
@@ -86,79 +239,108 @@ export const scheduleService = {
       throw new Error('Competition must be in REGISTRATION status to generate schedule');
     }
 
-    if (competition.teams.length < 2) {
-      throw new Error('Need at least 2 teams to generate schedule');
+    if (competition.teams.length < MIN_TEAMS) {
+      throw new Error(`Need at least ${MIN_TEAMS} teams to generate schedule`);
     }
 
-    // 2. Derive schedule parameters from competition dates
+    // Validate all teams are paid and have valid rosters
+    const requiredSize = competition.format === 'INTERMEDIATE_4S' ? 4 : 6;
+    const teamDetails = await Promise.all(
+      competition.teams.map(async (team) => {
+        const rosterCount = await prisma.teamRoster.count({
+          where: { teamId: team.id },
+        });
+        return { ...team, rosterCount };
+      })
+    );
+
+    const hasUnpaid = teamDetails.some((t) => t.status !== 'CONFIRMED');
+    const hasIncompleteRoster = teamDetails.some((t) => t.rosterCount < requiredSize);
+
+    if (hasUnpaid || hasIncompleteRoster) {
+      throw new Error(
+        `All teams must have completed payment and a full roster of ${requiredSize} players to generate the schedule`
+      );
+    }
+
+    // 2. Derive schedule parameters
+    const numberOfWeeks = competition.numberOfWeeks;
+    if (!numberOfWeeks) {
+      throw new Error('Competition must have numberOfWeeks set');
+    }
+
     const startDate = competition.startDate;
     const dayOfWeek = startDate.getDay();
+    const assignedSpaceIds =
+      competition.spaces.length > 0 ? competition.spaces.map((s) => s.id) : undefined;
 
-    // Calculate numberOfWeeks from dates, or use override
-    let numberOfWeeks: number;
-    if (competition.endDate) {
-      const diffMs = competition.endDate.getTime() - startDate.getTime();
-      numberOfWeeks = Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1;
-    } else if (numberOfWeeksOverride) {
-      numberOfWeeks = numberOfWeeksOverride;
-    } else {
-      throw new Error('Competition has no end date - numberOfWeeks is required');
-    }
+    // 3. Calculate dates (skipping holidays)
+    const { dates: weekDates } = calculateRoundDates(startDate, dayOfWeek, numberOfWeeks);
 
-    // Check all teams are paid and have valid rosters
-    const requiredSize = competition.format === 'INTERMEDIATE_4S' ? 4 : 6;
-    for (const team of competition.teams) {
-      // Check payment status
-      if (team.status !== 'CONFIRMED') {
-        throw new Error(`Team "${team.name}" has not completed payment`);
-      }
+    // 4. Get court availability
+    const availability = await getCourtAvailability(weekDates, assignedSpaceIds);
 
-      const rosterCount = await prisma.teamRoster.count({
-        where: { teamId: team.id },
-      });
-      if (rosterCount < requiredSize) {
-        throw new Error(`Team "${team.name}" needs ${requiredSize} players, has ${rosterCount}`);
-      }
-    }
-
-    // 2. Generate round-robin pairings for the specified number of weeks
-    // If weeks > teams-1, matchups will repeat (teams play each other multiple times)
+    // 5. Generate round-robin pairings (with exhibition for odd teams)
     const teamIds = competition.teams.map((t) => t.id);
     const pairings = generateRoundRobinPairings(teamIds, numberOfWeeks);
 
-    // 3. Calculate dates for each week
-    const weekDates = calculateRoundDates(startDate, dayOfWeek, numberOfWeeks);
+    // 6. Validate capacity: enough slots for all matches each week
+    for (let i = 0; i < pairings.length; i++) {
+      const totalMatches = pairings[i].length;
+      let availableCount = 0;
+      for (const courts of availability[i].availableSlots.values()) {
+        availableCount += courts.length;
+      }
+      if (totalMatches > availableCount) {
+        const weekDate = weekDates[i].toLocaleDateString();
+        throw new Error(
+          `Week of ${weekDate}: ${totalMatches} matches need ${totalMatches} court slots, but only ${availableCount} are available. Free up courts or reduce teams.`
+        );
+      }
+    }
 
-    // 4. Assign time slots and courts fairly
-    const scheduledMatches = assignTimeSlotsAndCourts(pairings, weekDates, courtIds);
+    // 7. Assign time slots and courts
+    const scheduledMatches = assignTimeSlotsAndCourts(pairings, availability);
 
-    // 5. Create Events and Matches in a transaction
+    // 8. Compute end date (last week's date)
+    const computedEndDate = weekDates[weekDates.length - 1];
+
+    // 9. Create Events and Matches in a transaction
     const result = await prisma.$transaction(async (tx) => {
+      // Update competition endDate
+      await tx.competition.update({
+        where: { id: competitionId },
+        data: { endDate: computedEndDate },
+      });
+
       const createdMatches = [];
 
       for (const match of scheduledMatches) {
-        // Find team names for event title
         const team1 = competition.teams.find((t) => t.id === match.team1Id);
         const team2 = competition.teams.find((t) => t.id === match.team2Id);
+
+        const matchDate = new Date(match.date);
+        const startTime = new Date(matchDate.setHours(match.startHour, 0, 0, 0));
+        const endTime = new Date(new Date(startTime).setHours(match.startHour + 1, 0, 0, 0));
 
         // Create Event (calendar entry)
         const event = await tx.event.create({
           data: {
             title: `${team1!.name} vs ${team2!.name}`,
-            description: `${competition.name} - Round ${match.roundNumber}`,
+            description: `${competition.name} - Week ${match.roundNumber}`,
             eventType: competition.type === 'LEAGUE' ? 'LEAGUE' : 'TOURNAMENT',
-            courtId: match.courtId,
-            startTime: new Date(match.date.setHours(match.startHour, 0, 0, 0)),
-            endTime: new Date(match.date.setHours(match.startHour + 1, 0, 0, 0)),
-            maxCapacity: 2, // Two teams
-            currentEnrollment: 2, // Both teams "enrolled"
-            level: 'INTERMEDIATE', // Default, could be derived from format
-            gender: 'COED', // Default, could be added to competition model
+            spaceId: match.spaceId,
+            startTime,
+            endTime,
+            maxCapacity: 2,
+            currentEnrollment: 2,
+            level: 'INTERMEDIATE',
+            gender: 'COED',
             status: 'SCHEDULED',
           },
         });
 
-        // Create Match (competition metadata)
+        // Create Match
         const createdMatch = await tx.match.create({
           data: {
             competitionId,
@@ -166,7 +348,8 @@ export const scheduleService = {
             team1Id: match.team1Id,
             team2Id: match.team2Id,
             roundNumber: match.roundNumber,
-            isPlayoff: false,
+            matchType: match.matchType,
+            exhibitionForTeamId: match.exhibitionForTeamId ?? null,
           },
           include: {
             event: true,
@@ -182,10 +365,7 @@ export const scheduleService = {
     });
 
     return {
-      competition: {
-        id: competition.id,
-        name: competition.name,
-      },
+      competition: { id: competition.id, name: competition.name },
       matchesCreated: result.length,
       weeks: numberOfWeeks,
       matches: result,
@@ -193,9 +373,7 @@ export const scheduleService = {
   },
 
   /**
-   * Record a match score
-   *
-   * WHO: Admin/Staff only
+   * Record a match score (Admin/Staff only)
    */
   async recordScore(matchId: string, team1Score: number, team2Score: number) {
     const match = await prisma.match.findUnique({
@@ -229,66 +407,88 @@ export const scheduleService = {
     return prisma.match.findMany({
       where: { competitionId },
       include: {
-        event: true,
+        event: {
+          include: {
+            space: { select: { id: true, name: true } },
+          },
+        },
         team1: { select: { id: true, name: true } },
         team2: { select: { id: true, name: true } },
       },
-      orderBy: [
-        { roundNumber: 'asc' },
-        { event: { startTime: 'asc' } },
-      ],
+      orderBy: [{ roundNumber: 'asc' }, { event: { startTime: 'asc' } }],
     });
   },
 };
 
+// ============== ALGORITHM FUNCTIONS ==============
+
 /**
- * Generate round-robin pairings using the "circle method"
+ * Generate round-robin pairings using the "circle method".
  *
- * ALGORITHM:
- * - Fix one team in place, rotate others around it
- * - Each rotation produces one round of matchups
- * - Guarantees each team plays every other team exactly once per cycle
- *
- * EXAMPLE for 4 teams [A, B, C, D]:
- *   Round 1: A-D, B-C (A fixed, others rotate)
- *   Round 2: A-C, D-B
- *   Round 3: A-B, C-D
- *
- * EXTENDED SEASONS:
- * - If numberOfWeeks > teams-1, we cycle through matchups again
- * - Example: 4 teams, 8 weeks = 2 full cycles + 2 extra weeks
- * - Home/away flips on the second cycle for fairness
- *
- * For odd teams, add a "BYE" placeholder - team matched with BYE skips that round
+ * For odd teams: the team that would have a BYE instead plays
+ * an EXHIBITION match against the team with fewest prior double headers.
  */
 function generateRoundRobinPairings(teamIds: string[], numberOfWeeks: number): Matchup[][] {
   const teams = [...teamIds];
+  const isOdd = teams.length % 2 !== 0;
 
-  // If odd number of teams, add a "bye" placeholder
-  if (teams.length % 2 !== 0) {
+  // For odd teams, add BYE placeholder (will be replaced with exhibition)
+  if (isOdd) {
     teams.push('BYE');
   }
 
   const n = teams.length;
-  const roundsPerCycle = n - 1; // Full round-robin cycle length
+  const roundsPerCycle = n - 1;
   const rounds: Matchup[][] = [];
 
+  // Track double header count for fair exhibition opponent selection
+  const doubleHeaderCount: Record<string, number> = {};
+  teamIds.forEach((id) => (doubleHeaderCount[id] = 0));
+
   for (let week = 0; week < numberOfWeeks; week++) {
-    // Which round within the current cycle? (0 to roundsPerCycle-1)
     const roundInCycle = week % roundsPerCycle;
-
-    // Rotate teams for this round
-    const rotatedTeams = getRotatedTeams(teamIds, roundInCycle);
-
+    const rotatedTeams = getRotatedTeams(teams, roundInCycle);
     const matchups: Matchup[] = [];
+    let byeTeamId: string | null = null;
 
     for (let i = 0; i < rotatedTeams.length / 2; i++) {
       const teamA = rotatedTeams[i];
       const teamB = rotatedTeams[rotatedTeams.length - 1 - i];
 
-      // Skip matches involving BYE
-      if (teamA !== 'BYE' && teamB !== 'BYE') {
-        matchups.push({ team1Id: teamA, team2Id: teamB });
+      if (teamA === 'BYE') {
+        byeTeamId = teamB;
+      } else if (teamB === 'BYE') {
+        byeTeamId = teamA;
+      } else {
+        matchups.push({
+          team1Id: teamA,
+          team2Id: teamB,
+          matchType: 'REGULAR',
+        });
+      }
+    }
+
+    // Handle exhibition match for bye team
+    if (byeTeamId && isOdd) {
+      // Find the best exhibition opponent: team with fewest double headers
+      // (excluding the bye team itself)
+      const regularTeamsThisWeek = matchups.map((m) => [m.team1Id, m.team2Id]).flat();
+      const candidates = regularTeamsThisWeek.slice(); // all teams playing this week
+
+      // Sort by double header count (ascending) to pick fairest opponent
+      candidates.sort((a, b) => doubleHeaderCount[a] - doubleHeaderCount[b]);
+      const exhibitionOpponent = candidates[0];
+
+      if (exhibitionOpponent) {
+        matchups.push({
+          team1Id: byeTeamId,
+          team2Id: exhibitionOpponent,
+          matchType: 'EXHIBITION',
+          exhibitionForTeamId: byeTeamId,
+        });
+
+        // Track double header for the opponent (bye team only plays 1 game)
+        doubleHeaderCount[exhibitionOpponent]++;
       }
     }
 
@@ -299,131 +499,167 @@ function generateRoundRobinPairings(teamIds: string[], numberOfWeeks: number): M
 }
 
 /**
- * Get team array after N rotations (for round-robin circle method)
- * First team stays fixed, others rotate
+ * Get team array after N rotations (circle method).
+ * First team stays fixed, others rotate.
  */
-function getRotatedTeams(teamIds: string[], rotations: number): string[] {
-  const teams = [...teamIds];
+function getRotatedTeams(teams: string[], rotations: number): string[] {
+  const arr = [...teams];
 
-  // If odd number of teams, add a "bye" placeholder
-  if (teams.length % 2 !== 0) {
-    teams.push('BYE');
-  }
-
-  // Apply rotations: keep first team fixed, rotate others
   for (let r = 0; r < rotations; r++) {
-    const last = teams.pop()!;
-    teams.splice(1, 0, last);
+    const last = arr.pop()!;
+    arr.splice(1, 0, last);
   }
 
-  return teams;
+  return arr;
 }
 
 /**
- * Calculate dates for each round
+ * Assign time slots and courts based on variable availability.
  *
- * For leagues: Each round is one week apart, on the specified day
- * For tournaments: Could be same day (implement later if needed)
- */
-function calculateRoundDates(startDate: Date, dayOfWeek: number, numberOfRounds: number): Date[] {
-  const dates: Date[] = [];
-  const current = new Date(startDate);
-
-  // Adjust to the correct day of week
-  const currentDay = current.getDay();
-  const daysUntilTarget = (dayOfWeek - currentDay + 7) % 7;
-  current.setDate(current.getDate() + daysUntilTarget);
-
-  for (let i = 0; i < numberOfRounds; i++) {
-    dates.push(new Date(current));
-    current.setDate(current.getDate() + 7); // Next week
-  }
-
-  return dates;
-}
-
-/**
- * Assign time slots and courts fairly
- *
- * COURT USAGE:
- * - Multiple matches can happen at the same time on different courts
- * - Example with 3 courts: 6pm has Court 1, Court 2, Court 3 available
- * - Fill courts at each time slot before moving to next time slot
- *
- * FAIR TIME SLOT ROTATION:
- * - Track "slot debt" per team (how many bad slots they've had)
- * - Use MAX debt of either team in a matchup (not combined!)
- * - This ensures the team with highest individual debt gets priority
- *
- * WHY MAX, NOT COMBINED?
- * - Combined: Team A (+3) vs Team B (+3) = 6, Team C (+5) vs Team D (0) = 5
- *   → Match A gets 6pm, but Team C has highest individual debt!
- * - Max: Match A max = 3, Match B max = 5
- *   → Match B gets 6pm, Team C gets compensated ✓
- *
- * SLOT DEBT CALCULATION:
- * - Slots weighted: 6pm=4, 7pm=3, 8pm=2, 9pm=1
- * - Average weight is 2.5
- * - Getting 6pm (weight 4) decreases debt by 1.5
- * - Getting 9pm (weight 1) increases debt by 1.5
+ * Regular matches assigned first (by slot debt priority).
+ * Exhibition matches placed adjacent to the opponent's regular match when possible.
  */
 function assignTimeSlotsAndCourts(
   pairings: Matchup[][],
-  weekDates: Date[],
-  courtIds: number[]
+  availability: WeekAvailability[]
 ): ScheduledMatch[] {
   const scheduledMatches: ScheduledMatch[] = [];
-  const slotDebt: Record<string, number> = {}; // teamId -> debt
+  const slotDebt: Record<string, number> = {};
 
-  // Initialize debt to 0 for all teams
-  pairings.flat().forEach((matchup) => {
-    slotDebt[matchup.team1Id] = 0;
-    slotDebt[matchup.team2Id] = 0;
+  // Initialize debt
+  pairings.flat().forEach((m) => {
+    slotDebt[m.team1Id] = slotDebt[m.team1Id] ?? 0;
+    slotDebt[m.team2Id] = slotDebt[m.team2Id] ?? 0;
   });
-
-  // Number of matches that can happen at each time slot
-  const matchesPerTimeSlot = courtIds.length;
 
   pairings.forEach((weekMatchups, weekIndex) => {
     const weekNumber = weekIndex + 1;
-    const date = weekDates[weekIndex];
+    const weekAvail = availability[weekIndex];
 
-    // Sort matchups by MAX slot debt of either team (not combined!)
-    // This ensures the team with highest individual debt gets priority
-    const sortedMatchups = [...weekMatchups].sort((a, b) => {
+    // Separate regular and exhibition matches
+    const regularMatches = weekMatchups.filter((m) => m.matchType === 'REGULAR');
+    const exhibitionMatches = weekMatchups.filter((m) => m.matchType === 'EXHIBITION');
+
+    // Build ordered available slots for this week (best preference first)
+    const orderedSlots = buildOrderedSlots(weekAvail);
+
+    // Track which slots are consumed this week
+    const consumed = new Set<string>(); // "spaceId:hour"
+
+    // Sort regular matches by max slot debt (higher debt gets better slots)
+    const sortedRegular = [...regularMatches].sort((a, b) => {
       const maxDebtA = Math.max(slotDebt[a.team1Id], slotDebt[a.team2Id]);
       const maxDebtB = Math.max(slotDebt[b.team1Id], slotDebt[b.team2Id]);
-      return maxDebtB - maxDebtA; // Higher max debt gets priority for better slots
+      return maxDebtB - maxDebtA;
     });
 
-    // Assign matches to time slots and courts
-    // Fill all courts at 6pm first, then all courts at 7pm, etc.
-    sortedMatchups.forEach((matchup, matchIndex) => {
-      // Which time slot? (0, 1, 2, 3 = 6pm, 7pm, 8pm, 9pm)
-      const timeSlotIndex = Math.floor(matchIndex / matchesPerTimeSlot);
-      const timeSlot = TIME_SLOTS[timeSlotIndex % TIME_SLOTS.length];
+    // Assign regular matches
+    const regularAssignments = new Map<string, { spaceId: string; hour: number }>();
 
-      // Which court within this time slot?
-      const courtIndex = matchIndex % matchesPerTimeSlot;
-      const courtId = courtIds[courtIndex];
+    for (const match of sortedRegular) {
+      const slot = findAvailableSlot(orderedSlots, consumed);
+      if (!slot) {
+        throw new Error(`No available slot for regular match in week ${weekNumber}`);
+      }
+      consumed.add(`${slot.spaceId}:${slot.hour}`);
+      regularAssignments.set(`${match.team1Id}:${match.team2Id}`, slot);
 
       scheduledMatches.push({
-        ...matchup,
+        ...match,
         roundNumber: weekNumber,
-        date: new Date(date),
-        startHour: timeSlot,
-        courtId,
+        date: new Date(weekAvail.date),
+        startHour: slot.hour,
+        spaceId: slot.spaceId,
       });
 
-      // Update slot debt for both teams
-      const slotWeight = SLOT_WEIGHTS[timeSlot];
-      const debtChange = AVERAGE_SLOT_WEIGHT - slotWeight;
-      slotDebt[matchup.team1Id] += debtChange;
-      slotDebt[matchup.team2Id] += debtChange;
-    });
+      // Update slot debt
+      const debtChange = AVERAGE_SLOT_WEIGHT - SLOT_WEIGHTS[slot.hour];
+      slotDebt[match.team1Id] += debtChange;
+      slotDebt[match.team2Id] += debtChange;
+    }
+
+    // Assign exhibition matches (try to place adjacent to opponent's regular match)
+    for (const match of exhibitionMatches) {
+      const opponentId =
+        match.exhibitionForTeamId === match.team1Id ? match.team2Id : match.team1Id;
+
+      // Find opponent's regular match assignment
+      let preferredSlot: { spaceId: string; hour: number } | null = null;
+      for (const [key, assignment] of regularAssignments) {
+        if (key.includes(opponentId)) {
+          // Try same court, next time slot
+          const nextHour = assignment.hour + 1;
+          if (
+            TIME_SLOTS.includes(nextHour) &&
+            !consumed.has(`${assignment.spaceId}:${nextHour}`)
+          ) {
+            // Check it's actually available in the original availability
+            const freeCourts = weekAvail.availableSlots.get(nextHour);
+            if (freeCourts && freeCourts.includes(assignment.spaceId)) {
+              preferredSlot = { spaceId: assignment.spaceId, hour: nextHour };
+            }
+          }
+          break;
+        }
+      }
+
+      const slot = preferredSlot || findAvailableSlot(orderedSlots, consumed);
+      if (!slot) {
+        throw new Error(`No available slot for exhibition match in week ${weekNumber}`);
+      }
+      consumed.add(`${slot.spaceId}:${slot.hour}`);
+
+      scheduledMatches.push({
+        ...match,
+        roundNumber: weekNumber,
+        date: new Date(weekAvail.date),
+        startHour: slot.hour,
+        spaceId: slot.spaceId,
+      });
+
+      // Update slot debt (exhibition still affects fairness)
+      const debtChange = AVERAGE_SLOT_WEIGHT - SLOT_WEIGHTS[slot.hour];
+      slotDebt[match.team1Id] += debtChange;
+      slotDebt[match.team2Id] += debtChange;
+    }
   });
 
   return scheduledMatches;
+}
+
+/**
+ * Build an ordered list of available slots for a week, sorted by preference.
+ */
+function buildOrderedSlots(
+  weekAvail: WeekAvailability
+): { spaceId: string; hour: number }[] {
+  const slots: { spaceId: string; hour: number }[] = [];
+
+  for (const hour of SLOTS_BY_PREFERENCE) {
+    const freeCourts = weekAvail.availableSlots.get(hour);
+    if (freeCourts) {
+      for (const spaceId of freeCourts) {
+        slots.push({ spaceId, hour });
+      }
+    }
+  }
+
+  return slots;
+}
+
+/**
+ * Find the first available slot that hasn't been consumed this week.
+ */
+function findAvailableSlot(
+  orderedSlots: { spaceId: string; hour: number }[],
+  consumed: Set<string>
+): { spaceId: string; hour: number } | null {
+  for (const slot of orderedSlots) {
+    if (!consumed.has(`${slot.spaceId}:${slot.hour}`)) {
+      return slot;
+    }
+  }
+  return null;
 }
 
 export default scheduleService;

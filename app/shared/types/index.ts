@@ -12,12 +12,23 @@ export type MembershipType = 'GOLD' | 'DROP_IN' | 'NONE';
 export type MembershipStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED';
 export type EnrollmentStatus = 'REGISTERED' | 'WAITLISTED' | 'CANCELLED' | 'ATTENDED' | 'NO_SHOW';
 
+// Space types
+export type SpaceType = 'COURT' | 'OPEN_AREA' | 'GAMES';
+export type MatchType = 'REGULAR' | 'EXHIBITION' | 'PLAYOFF';
+
+export interface Space {
+  id: string;
+  name: string;
+  type: SpaceType;
+  facilityId: string;
+}
+
 export interface Event {
   id: string;
   title: string;
   description?: string;
   eventType: EventType;
-  courtId: number;
+  spaceId: string;
   startTime: string;
   endTime: string;
   maxCapacity: number;
@@ -30,6 +41,7 @@ export interface Event {
   status: EventStatus;
   createdAt: string;
   updatedAt: string;
+  space?: Space;
   enrollments?: Enrollment[];
 }
 
@@ -91,7 +103,7 @@ export interface EventFormData {
   title: string;
   description?: string;
   eventType: EventType;
-  courtId: number;
+  spaceId: string;
   startTime: Date;
   endTime: Date;
   maxCapacity: number;
@@ -114,7 +126,7 @@ export interface EventFilters {
   startDate?: string;
   endDate?: string;
   eventType?: EventType;
-  courtId?: number;
+  spaceId?: string;
   level?: SkillLevel;
   gender?: GenderCategory;
   isYouth?: boolean;
@@ -211,13 +223,16 @@ export interface Competition {
   format: CompetitionFormat;
   startDate: string;
   endDate?: string;
+  numberOfWeeks?: number;
   pricePerTeam: number;
+  deposit?: number;
   maxTeams: number;
   status: CompetitionStatus;
   registrationDeadline?: string;
   createdAt: string;
   updatedAt: string;
   teams?: Team[];
+  spaces?: Space[];
   _count?: { teams: number };
 }
 
@@ -252,7 +267,8 @@ export interface Match {
   team1Id: string;
   team2Id: string;
   roundNumber: number;
-  isPlayoff: boolean;
+  matchType: MatchType;
+  exhibitionForTeamId?: string;
   team1Score?: number | null;
   team2Score?: number | null;
   createdAt: string;
@@ -300,7 +316,8 @@ export interface Standing {
   teamName: string;
   wins: number;
   losses: number;
-  points: number;
+  pointsFor: number;
+  pointsAgainst: number;
   gamesPlayed: number;
 }
 
@@ -315,17 +332,14 @@ export interface CompetitionFormData {
   type: CompetitionType;
   format: CompetitionFormat;
   startDate: Date;
-  endDate?: Date;
+  numberOfWeeks?: number;
   pricePerTeam: number;
+  deposit?: number;
   maxTeams: number;
   registrationDeadline?: Date;
+  spaceIds?: string[];
 }
 
 export interface TeamFormData {
   name: string;
-}
-
-export interface ScheduleConfig {
-  courtIds: number[];
-  numberOfWeeks?: number;  // Required only if competition has no endDate
 }

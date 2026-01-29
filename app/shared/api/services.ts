@@ -15,7 +15,6 @@ import {
   Match,
   Standing,
   TeamPaymentStatusResponse,
-  ScheduleConfig,
 } from '../types';
 
 export interface PlayerFilters {
@@ -251,7 +250,6 @@ export const competitionsApi = {
     const payload = {
       ...data,
       startDate: data.startDate.toISOString(),
-      endDate: data.endDate?.toISOString(),
       registrationDeadline: data.registrationDeadline?.toISOString(),
     };
     const response = await api.post<ApiResponse<Competition>>('/competitions', payload);
@@ -262,7 +260,6 @@ export const competitionsApi = {
     const payload = {
       ...data,
       ...(data.startDate && { startDate: data.startDate.toISOString() }),
-      ...(data.endDate && { endDate: data.endDate.toISOString() }),
       ...(data.registrationDeadline && { registrationDeadline: data.registrationDeadline.toISOString() }),
     };
     const response = await api.put<ApiResponse<Competition>>(`/competitions/${id}`, payload);
@@ -278,8 +275,17 @@ export const competitionsApi = {
     return response.data.data!;
   },
 
-  generateSchedule: async (id: string, config: ScheduleConfig): Promise<{ matchesCreated: number; matches: Match[] }> => {
-    const response = await api.post<ApiResponse<{ matchesCreated: number; matches: Match[] }>>(`/competitions/${id}/schedule`, config);
+  generateSchedule: async (id: string): Promise<{ matchesCreated: number; matches: Match[] }> => {
+    const response = await api.post<ApiResponse<{ matchesCreated: number; matches: Match[] }>>(`/competitions/${id}/schedule`);
+    return response.data.data!;
+  },
+
+  getMaxTeams: async (startDate: string, numberOfWeeks: number, spaceIds?: string[]): Promise<{ maxTeams: number; weekDates: string[]; holidays: string[] }> => {
+    const params = new URLSearchParams({ startDate, numberOfWeeks: String(numberOfWeeks) });
+    if (spaceIds && spaceIds.length > 0) {
+      params.append('spaceIds', spaceIds.join(','));
+    }
+    const response = await api.get<ApiResponse<{ maxTeams: number; weekDates: string[]; holidays: string[] }>>(`/competitions/max-teams?${params}`);
     return response.data.data!;
   },
 
