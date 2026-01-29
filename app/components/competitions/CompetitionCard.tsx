@@ -59,7 +59,9 @@ export default function CompetitionCard({
 
       <View style={styles.details}>
         <Text style={styles.format}>
-          {formatLabels[competition.format] || competition.format} · ${competition.pricePerTeam}/team
+          {formatLabels[competition.format] || competition.format}
+          {competition.numberOfWeeks ? ` · ${competition.numberOfWeeks} weeks` : ''}
+          {` · $${competition.pricePerTeam}/team`}
         </Text>
         <Text style={styles.dateTime}>
           Starts {startDate.format('MMM D, YYYY')}

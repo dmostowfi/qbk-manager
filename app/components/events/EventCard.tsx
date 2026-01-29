@@ -59,7 +59,7 @@ export default function EventCard({
           {startTime.format('ddd, MMM D')} · {startTime.format('h:mm A')} - {endTime.format('h:mm A')}
         </Text>
         <Text style={styles.meta}>
-          Court {event.courtId} · {levelLabels[event.level] || event.level}
+          {event.space ? `Court ${event.space.name}` : 'Court'} · {levelLabels[event.level] || event.level}
         </Text>
         {event.instructor && (
           <Text style={styles.instructor}>Instructor: {event.instructor}</Text>

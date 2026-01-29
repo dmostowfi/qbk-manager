@@ -16,7 +16,7 @@ import dayjs from 'dayjs';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { useCompetition } from '../../shared/hooks/useCompetition';
 import { teamsApi, competitionsApi } from '../../shared/api/services';
-import { CompetitionFormData, CompetitionStatus, Team, ScheduleConfig, Match } from '../../shared/types';
+import { CompetitionFormData, CompetitionStatus, Team, Match } from '../../shared/types';
 import TeamList from '../../components/competitions/TeamList';
 import TeamForm from '../../components/competitions/TeamForm';
 import TeamDetailModal from '../../components/competitions/TeamDetailModal';
@@ -141,10 +141,10 @@ export default function CompetitionDetailScreen() {
     }
   };
 
-  const handleGenerateSchedule = async (config: ScheduleConfig) => {
+  const handleGenerateSchedule = async () => {
     if (!id) return;
     try {
-      await competitionsApi.generateSchedule(id, config);
+      await competitionsApi.generateSchedule(id);
       await refetch();
     } catch (err: any) {
       Alert.alert('Generation Failed', err.message || 'Could not generate schedule');
@@ -152,10 +152,10 @@ export default function CompetitionDetailScreen() {
     }
   };
 
-  // Can generate schedule if: admin + REGISTRATION status + 2+ teams + no matches yet
+  // Can generate schedule if: admin + REGISTRATION status + 4+ teams + no matches yet
   const canGenerateSchedule = canEdit &&
     competition?.status === 'REGISTRATION' &&
-    teams.length >= 2 &&
+    teams.length >= 4 &&
     matches.length === 0;
 
   // Can record scores if: admin/staff + ACTIVE status
@@ -247,6 +247,12 @@ export default function CompetitionDetailScreen() {
           <FontAwesome name="users" size={14} color={brand.colors.textLight} />
           <Text style={styles.infoText}>{teamCount}/{competition.maxTeams} teams</Text>
         </View>
+        {competition.numberOfWeeks && (
+          <View style={styles.infoItem}>
+            <FontAwesome name="clock-o" size={14} color={brand.colors.textLight} />
+            <Text style={styles.infoText}>{competition.numberOfWeeks} weeks</Text>
+          </View>
+        )}
         <View style={styles.infoItem}>
           <FontAwesome name="dollar" size={14} color={brand.colors.textLight} />
           <Text style={styles.infoText}>${competition.pricePerTeam}/team</Text>

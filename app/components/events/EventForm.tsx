@@ -68,7 +68,7 @@ export default function EventForm({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [eventType, setEventType] = useState<EventType>('CLASS');
-  const [courtId, setCourtId] = useState('1');
+  const [spaceId, setSpaceId] = useState('court-l');
   const [eventDate, setEventDate] = useState<Date>(new Date());
   const [startTimeDate, setStartTimeDate] = useState<Date>(new Date());
   const [endTimeDate, setEndTimeDate] = useState<Date>(new Date());
@@ -105,7 +105,7 @@ export default function EventForm({
       setTitle(event.title);
       setDescription(event.description || '');
       setEventType(event.eventType);
-      setCourtId(String(event.courtId));
+      setSpaceId(event.spaceId);
       const start = new Date(event.startTime);
       const end = new Date(event.endTime);
       setEventDate(start);
@@ -127,7 +127,7 @@ export default function EventForm({
       setTitle('');
       setDescription('');
       setEventType('CLASS');
-      setCourtId('1');
+      setSpaceId('court-l');
       setEventDate(defaultStart);
       setStartTimeDate(defaultStart);
       setEndTimeDate(defaultEnd);
@@ -271,7 +271,7 @@ export default function EventForm({
         title: title.trim(),
         description: description.trim() || undefined,
         eventType,
-        courtId: parseInt(courtId, 10),
+        spaceId,
         startTime: startDateTime,
         endTime: endDateTime,
         maxCapacity: parseInt(maxCapacity, 10),
@@ -381,13 +381,18 @@ export default function EventForm({
           <View style={styles.row}>
             <View style={styles.halfField}>
               <Text style={styles.label}>Court</Text>
-              <TextInput
-                style={[styles.input, !editable && styles.inputDisabled]}
-                value={courtId}
-                onChangeText={setCourtId}
-                keyboardType="number-pad"
-                editable={editable}
-              />
+              <View style={[styles.pickerContainer, !editable && styles.inputDisabled]}>
+                <Picker
+                  selectedValue={spaceId}
+                  onValueChange={(value) => setSpaceId(value)}
+                  style={styles.picker}
+                  enabled={editable}
+                >
+                  <Picker.Item label="Court L" value="court-l" />
+                  <Picker.Item label="Court C" value="court-c" />
+                  <Picker.Item label="Court R" value="court-r" />
+                </Picker>
+              </View>
             </View>
             <View style={styles.halfField}>
               <Text style={styles.label}>Max Capacity</Text>

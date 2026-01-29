@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Modal,
@@ -10,14 +9,14 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { ScheduleConfig, Competition } from '../../shared/types';
+import { Competition } from '../../shared/types';
 import { brand } from '../../constants/branding';
 
 interface GenerateScheduleModalProps {
   visible: boolean;
   competition: Competition | null;
   onClose: () => void;
-  onSubmit: (config: ScheduleConfig) => Promise<void>;
+  onSubmit: () => Promise<void>;
 }
 
 const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -28,29 +27,15 @@ export default function GenerateScheduleModal({
   onClose,
   onSubmit,
 }: GenerateScheduleModalProps) {
-  const [courtIds, setCourtIds] = useState('1,2,3');
-  const [numberOfWeeksOverride, setNumberOfWeeksOverride] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Derive values from competition
   const startDate = competition ? new Date(competition.startDate) : new Date();
-  const endDate = competition?.endDate ? new Date(competition.endDate) : null;
   const dayOfWeek = startDate.getDay();
   const dayName = daysOfWeek[dayOfWeek];
-
-  // Calculate number of weeks from dates, or use override
-  const calculatedWeeks = endDate
-    ? Math.ceil((endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
-    : null;
-
-  useEffect(() => {
-    if (visible) {
-      setCourtIds('1,2,3');
-      setNumberOfWeeksOverride(calculatedWeeks ? '' : '8');
-      setError('');
-    }
-  }, [visible, calculatedWeeks]);
+  const numberOfWeeks = competition?.numberOfWeeks;
+  const assignedSpaces = competition?.spaces;
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -62,33 +47,11 @@ export default function GenerateScheduleModal({
   };
 
   const handleSubmit = async () => {
-    // Use calculated weeks if available, otherwise use override
-    const weeks = calculatedWeeks ?? parseInt(numberOfWeeksOverride, 10);
-    if (isNaN(weeks) || weeks < 1 || weeks > 52) {
-      setError('Number of weeks must be between 1 and 52');
-      return;
-    }
-
-    const courts = courtIds
-      .split(',')
-      .map((c) => parseInt(c.trim(), 10))
-      .filter((c) => !isNaN(c));
-
-    if (courts.length === 0) {
-      setError('Please enter at least one court ID');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
     try {
-      const config: ScheduleConfig = {
-        courtIds: courts,
-        // Only include numberOfWeeks if not calculated from dates
-        ...(calculatedWeeks ? {} : { numberOfWeeks: weeks }),
-      };
-      await onSubmit(config);
+      await onSubmit();
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to generate schedule');
@@ -120,6 +83,7 @@ export default function GenerateScheduleModal({
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
               This will create a round-robin schedule where each team plays every other team.
+              Courts will be automatically assigned based on calendar availability.
             </Text>
           </View>
 
@@ -134,34 +98,33 @@ export default function GenerateScheduleModal({
             <Text style={styles.readOnlyText}>{dayName}s</Text>
           </View>
 
-          <Text style={styles.label}>Number of Weeks</Text>
-          {calculatedWeeks ? (
-            <View style={styles.readOnlyField}>
-              <Text style={styles.readOnlyText}>{calculatedWeeks} weeks</Text>
-              <Text style={styles.readOnlySubtext}>
-                (based on competition end date)
-              </Text>
-            </View>
-          ) : (
-            <TextInput
-              style={styles.input}
-              value={numberOfWeeksOverride}
-              onChangeText={setNumberOfWeeksOverride}
-              keyboardType="number-pad"
-              placeholder="8"
-            />
+          {numberOfWeeks && (
+            <>
+              <Text style={styles.label}>Number of Weeks</Text>
+              <View style={styles.readOnlyField}>
+                <Text style={styles.readOnlyText}>{numberOfWeeks} weeks</Text>
+              </View>
+            </>
           )}
 
-          <Text style={styles.label}>Court IDs (comma-separated)</Text>
-          <TextInput
-            style={styles.input}
-            value={courtIds}
-            onChangeText={setCourtIds}
-            placeholder="1,2,3"
-          />
-          <Text style={styles.hint}>
-            Enter the court numbers to use for matches (e.g., 1,2,3)
-          </Text>
+          {assignedSpaces && assignedSpaces.length > 0 && (
+            <>
+              <Text style={styles.label}>Assigned Courts</Text>
+              <View style={styles.readOnlyField}>
+                <Text style={styles.readOnlyText}>
+                  {assignedSpaces.map((s) => `Court ${s.name}`).join(', ')}
+                </Text>
+              </View>
+            </>
+          )}
+
+          {(!assignedSpaces || assignedSpaces.length === 0) && (
+            <View style={styles.readOnlyField}>
+              <Text style={styles.readOnlySubtext}>
+                All available courts will be used automatically
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </View>
     </Modal>

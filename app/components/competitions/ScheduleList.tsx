@@ -94,7 +94,8 @@ function MatchRow({
   const team2Name = match.team2?.name ?? 'TBD';
   const hasScore = match.team1Score !== null && match.team2Score !== null;
   const eventDate = match.event?.startTime ? dayjs(match.event.startTime) : null;
-  const courtId = match.event?.courtId;
+  const spaceName = match.event?.space?.name;
+  const isExhibition = match.matchType === 'EXHIBITION';
 
   const handleScorePress = () => {
     if (onRecordScore) {
@@ -103,12 +104,13 @@ function MatchRow({
   };
 
   return (
-    <View style={styles.matchRow}>
+    <View style={[styles.matchRow, isExhibition && styles.exhibitionRow]}>
       <View style={styles.matchInfo}>
         {eventDate && (
           <Text style={styles.matchDate}>
             {eventDate.format('ddd, MMM D')} · {eventDate.format('h:mm A')}
-            {courtId && ` · Court ${courtId}`}
+            {spaceName && ` · Court ${spaceName}`}
+            {isExhibition && '  ·  Exhibition'}
           </Text>
         )}
         <View style={styles.teamsRow}>
@@ -206,6 +208,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
+  },
+  exhibitionRow: {
+    opacity: 0.7,
   },
   matchInfo: {
     flex: 1,

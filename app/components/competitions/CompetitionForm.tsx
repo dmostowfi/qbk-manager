@@ -48,8 +48,9 @@ export default function CompetitionForm({
   const [type, setType] = useState<CompetitionType>('LEAGUE');
   const [format, setFormat] = useState<CompetitionFormat>('INTERMEDIATE_4S');
   const [startDate, setStartDate] = useState<Date>(new Date());
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [numberOfWeeks, setNumberOfWeeks] = useState<string>('8');
   const [pricePerTeam, setPricePerTeam] = useState('200');
+  const [deposit, setDeposit] = useState('');
   const [maxTeams, setMaxTeams] = useState('8');
   const [registrationDeadline, setRegistrationDeadline] = useState<Date | undefined>(undefined);
 
@@ -59,7 +60,6 @@ export default function CompetitionForm({
 
   // Date picker visibility
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
 
   const isEditing = !!competition;
@@ -70,8 +70,9 @@ export default function CompetitionForm({
       setType(competition.type);
       setFormat(competition.format);
       setStartDate(new Date(competition.startDate));
-      setEndDate(competition.endDate ? new Date(competition.endDate) : undefined);
+      setNumberOfWeeks(competition.numberOfWeeks ? String(competition.numberOfWeeks) : '8');
       setPricePerTeam(String(competition.pricePerTeam));
+      setDeposit(competition.deposit ? String(competition.deposit) : '');
       setMaxTeams(String(competition.maxTeams));
       setRegistrationDeadline(
         competition.registrationDeadline ? new Date(competition.registrationDeadline) : undefined
@@ -85,13 +86,13 @@ export default function CompetitionForm({
       setType('LEAGUE');
       setFormat('INTERMEDIATE_4S');
       setStartDate(nextWeek);
-      setEndDate(undefined);
+      setNumberOfWeeks('8');
       setPricePerTeam('200');
+      setDeposit('');
       setMaxTeams('8');
       setRegistrationDeadline(undefined);
     }
     setShowStartDatePicker(false);
-    setShowEndDatePicker(false);
     setShowDeadlinePicker(false);
     setError('');
   }, [competition, visible]);
@@ -101,13 +102,6 @@ export default function CompetitionForm({
     setShowStartDatePicker(Platform.OS === 'ios');
     if (selectedDate) {
       setStartDate(selectedDate);
-    }
-  };
-
-  const handleEndDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    setShowEndDatePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setEndDate(selectedDate);
     }
   };
 
@@ -140,20 +134,22 @@ export default function CompetitionForm({
     }
 
     const teams = parseInt(maxTeams, 10);
-    if (isNaN(teams) || teams < 2) {
-      setError('Must have at least 2 teams');
+    if (isNaN(teams) || teams < 4) {
+      setError('Must have at least 4 teams');
       return;
     }
 
-    if (endDate && endDate < startDate) {
-      setError('End date must be after start date');
-      return;
+    if (type === 'LEAGUE') {
+      const weeks = parseInt(numberOfWeeks, 10);
+      if (isNaN(weeks) || (weeks !== 6 && weeks !== 8)) {
+        setError('Leagues must be 6 or 8 weeks');
+        return;
+      }
     }
 
-    // For leagues, ensure end date is same day of week as start date
-    if (type === 'LEAGUE' && endDate && endDate.getDay() !== startDate.getDay()) {
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      setError(`End date must be a ${days[startDate.getDay()]} (same day as start date)`);
+    const depositValue = deposit ? parseInt(deposit, 10) : undefined;
+    if (depositValue !== undefined && (isNaN(depositValue) || depositValue < 0)) {
+      setError('Deposit must be a positive number');
       return;
     }
 
@@ -171,8 +167,9 @@ export default function CompetitionForm({
         type,
         format,
         startDate,
-        endDate,
+        ...(type === 'LEAGUE' ? { numberOfWeeks: parseInt(numberOfWeeks, 10) } : {}),
         pricePerTeam: price,
+        ...(depositValue !== undefined ? { deposit: depositValue } : {}),
         maxTeams: teams,
         registrationDeadline,
       };
@@ -297,43 +294,35 @@ export default function CompetitionForm({
             </>
           )}
 
-          <Text style={styles.label}>End Date (Optional)</Text>
-          {Platform.OS === 'web' ? (
-            <input
-              type="date"
-              value={endDate ? endDate.toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                if (e.target.value) {
-                  const [year, month, day] = e.target.value.split('-').map(Number);
-                  const newDate = new Date();
-                  newDate.setFullYear(year, month - 1, day);
-                  setEndDate(newDate);
-                } else {
-                  setEndDate(undefined);
-                }
-              }}
-              style={webInputStyle}
-            />
-          ) : (
+          {type === 'LEAGUE' && (
             <>
-              <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowEndDatePicker(true)}
-              >
-                <Text style={[styles.dateTimeText, !endDate && styles.placeholderText]}>
-                  {endDate ? formatDate(endDate) : 'Select end date'}
-                </Text>
-              </TouchableOpacity>
-              {showEndDatePicker && (
-                <DateTimePicker
-                  value={endDate || new Date()}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={handleEndDateChange}
-                />
-              )}
+              <Text style={styles.label}>Number of Weeks</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={numberOfWeeks}
+                  onValueChange={(value) => setNumberOfWeeks(value)}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="6 weeks" value="6" />
+                  <Picker.Item label="8 weeks" value="8" />
+                </Picker>
+              </View>
             </>
           )}
+
+          <View style={styles.row}>
+            <View style={styles.halfField}>
+              <Text style={styles.label}>Deposit ($)</Text>
+              <TextInput
+                style={styles.input}
+                value={deposit}
+                onChangeText={setDeposit}
+                keyboardType="number-pad"
+                placeholder="Optional"
+              />
+            </View>
+            <View style={styles.halfField} />
+          </View>
 
           <Text style={styles.label}>Registration Deadline (Optional)</Text>
           {Platform.OS === 'web' ? (
