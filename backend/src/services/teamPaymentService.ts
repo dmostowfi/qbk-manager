@@ -11,34 +11,69 @@ const APP_URL = process.env.APP_URL || 'http://localhost:8081';
  *
  * PURPOSE: Handle team fee payments for competitions.
  *
- * TWO PAYMENT OPTIONS:
- * 1. FULL - Captain pays entire team fee
- * 2. SPLIT - Each player pays their share (fee ÷ roster size)
+ * TWO PAYMENT CATEGORIES:
+ * 1. DEPOSIT - Required before schedule generation
+ * 2. TEAM_FEE - Remaining balance after deposit
+ *
+ * TWO PAYMENT TYPES:
+ * 1. FULL - Captain pays entire amount for the category
+ * 2. SPLIT - Each player pays their share (amount ÷ roster size)
  *
  * FLOW:
  * 1. Player requests checkout → Create Stripe session + pending TeamPayment
  * 2. Stripe webhook fires on success → Mark TeamPayment complete
- * 3. Check if team is fully paid → Mark team as CONFIRMED
+ * 3. Check deposit/total thresholds → Update team depositPaid/status
  */
 export const teamPaymentService = {
   /**
-   * Calculate the per-player share of the team fee
+   * Calculate the effective team fee (with early bird discount if applicable)
    */
-  calculatePlayerShare(pricePerTeam: number, rosterSize: number): number {
-    // Round to 2 decimal places
-    return Math.round((pricePerTeam / rosterSize) * 100) / 100;
+  calculateEffectiveFee(
+    pricePerTeam: number,
+    earlyBirdDiscount: number,
+    depositPaidAt: Date | null,
+    earlyBirdDeadline: Date
+  ): { effectiveFee: number; earlyBirdApplied: boolean } {
+    const earlyBirdApplied = !!depositPaidAt && depositPaidAt <= earlyBirdDeadline;
+    const effectiveFee = earlyBirdApplied
+      ? pricePerTeam - earlyBirdDiscount
+      : pricePerTeam;
+    return { effectiveFee, earlyBirdApplied };
+  },
+
+  /**
+   * Get the earliest deposit payment date for a team
+   */
+  async getDepositPaidDate(teamId: string): Promise<Date | null> {
+    const firstDeposit = await prisma.teamPayment.findFirst({
+      where: {
+        teamId,
+        category: 'DEPOSIT',
+        status: 'COMPLETED',
+      },
+      orderBy: { paidAt: 'asc' },
+      select: { paidAt: true },
+    });
+    return firstDeposit?.paidAt ?? null;
   },
 
   /**
    * Get payment status for a team
    *
-   * Returns who's paid, who owes, and total amounts
+   * Returns deposit status, effective fee, early bird info, and per-player breakdown
    */
   async getPaymentStatus(teamId: string) {
     const team = await prisma.team.findUnique({
       where: { id: teamId },
       include: {
-        competition: { select: { pricePerTeam: true } },
+        competition: {
+          select: {
+            pricePerTeam: true,
+            deposit: true,
+            earlyBirdDiscount: true,
+            earlyBirdDeadline: true,
+          },
+        },
         roster: {
           include: {
             player: {
@@ -52,6 +87,7 @@ export const teamPaymentService = {
             playerId: true,
             amount: true,
             paymentType: true,
+            category: true,
             status: true,
             paidAt: true,
           },
@@ -64,55 +100,60 @@ export const teamPaymentService = {
     }
 
     const pricePerTeam = Number(team.competition.pricePerTeam);
+    const depositAmount = Number(team.competition.deposit);
+    const earlyBirdDiscount = Number(team.competition.earlyBirdDiscount);
+    const earlyBirdDeadline = team.competition.earlyBirdDeadline;
     const rosterSize = team.roster.length;
-    const playerShare = this.calculatePlayerShare(pricePerTeam, rosterSize);
 
-    // Check if captain paid in full
-    const fullPayment = team.payments.find(
-      (p) => p.paymentType === 'FULL' && p.status === 'COMPLETED'
+    // Get deposit paid date for early bird calculation
+    const depositPaidAt = await this.getDepositPaidDate(teamId);
+    const { effectiveFee, earlyBirdApplied } = this.calculateEffectiveFee(
+      pricePerTeam,
+      earlyBirdDiscount,
+      depositPaidAt,
+      earlyBirdDeadline
     );
 
-    if (fullPayment) {
-      return {
-        teamId: team.id,
-        teamStatus: team.status,
-        paidInFull: true,
-        paidBy: fullPayment.playerId,
-        totalAmount: pricePerTeam,
-        amountPaid: pricePerTeam,
-        amountOwed: 0,
-        playerPayments: [],
-      };
-    }
+    // Sum completed payments
+    const completedPayments = team.payments.filter((p) => p.status === 'COMPLETED');
+    const totalPaid = completedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const depositPaid = completedPayments
+      .filter((p) => p.category === 'DEPOSIT')
+      .reduce((sum, p) => sum + Number(p.amount), 0);
 
-    // Calculate split payment status
+    const balanceRemaining = Math.max(0, effectiveFee - totalPaid);
+
+    // Per-player breakdown
     const playerPayments = team.roster.map((rosterEntry) => {
-      const payment = team.payments.find(
-        (p) => p.playerId === rosterEntry.playerId && p.status === 'COMPLETED'
+      const playerCompletedPayments = completedPayments.filter(
+        (p) => p.playerId === rosterEntry.playerId
       );
+      const amountPaid = playerCompletedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+
       return {
         playerId: rosterEntry.player.id,
         playerName: `${rosterEntry.player.firstName} ${rosterEntry.player.lastName}`,
         email: rosterEntry.player.email,
-        amountOwed: playerShare,
-        amountPaid: payment ? Number(payment.amount) : 0,
-        paid: !!payment,
-        paidAt: payment?.paidAt || null,
+        amountPaid,
+        paid: amountPaid > 0,
+        paidAt: playerCompletedPayments[0]?.paidAt?.toISOString() || null,
+        categories: playerCompletedPayments.map((p) => p.category),
       };
     });
-
-    const amountPaid = playerPayments.reduce((sum, p) => sum + p.amountPaid, 0);
 
     return {
       teamId: team.id,
       teamStatus: team.status,
-      paidInFull: false,
-      totalAmount: pricePerTeam,
-      playerShare,
-      amountPaid,
-      amountOwed: pricePerTeam - amountPaid,
+      paidInFull: team.paidInFull,
+      depositPaid: team.depositPaid,
+      depositAmount,
+      effectiveFee,
+      earlyBirdApplied,
+      balanceRemaining,
+      totalAmount: effectiveFee,
+      amountPaid: totalPaid,
+      amountOwed: balanceRemaining,
       playerPayments,
-      playersRemaining: playerPayments.filter((p) => !p.paid).length,
     };
   },
 
@@ -122,17 +163,30 @@ export const teamPaymentService = {
    * @param teamId - Team to pay for
    * @param playerId - Player making the payment
    * @param paymentType - 'FULL' (captain pays all) or 'SPLIT' (player pays their share)
+   * @param category - 'DEPOSIT' or 'TEAM_FEE'
    */
   async createCheckoutSession(
     teamId: string,
     playerId: string,
-    paymentType: 'FULL' | 'SPLIT'
+    paymentType: 'FULL' | 'SPLIT',
+    category: 'DEPOSIT' | 'TEAM_FEE'
   ) {
     // Get team with competition and roster
     const team = await prisma.team.findUnique({
       where: { id: teamId },
       include: {
-        competition: { select: { id: true, name: true, pricePerTeam: true, status: true, stripeProductId: true } },
+        competition: {
+          select: {
+            id: true,
+            name: true,
+            pricePerTeam: true,
+            deposit: true,
+            earlyBirdDiscount: true,
+            earlyBirdDeadline: true,
+            status: true,
+            stripeProductId: true,
+          },
+        },
         roster: { select: { playerId: true } },
         captain: { select: { id: true } },
       },
@@ -142,8 +196,8 @@ export const teamPaymentService = {
       throw new Error('Team not found');
     }
 
-    // Validate competition is in REGISTRATION status
-    if (team.competition.status !== 'REGISTRATION') {
+    // Allow payments during REGISTRATION and ACTIVE
+    if (team.competition.status !== 'REGISTRATION' && team.competition.status !== 'ACTIVE') {
       throw new Error('Competition is not open for payments');
     }
 
@@ -158,37 +212,34 @@ export const teamPaymentService = {
       throw new Error('Only the team captain can pay the full amount');
     }
 
-    // Check if already paid
-    const existingPayment = await prisma.teamPayment.findFirst({
-      where: {
-        teamId,
-        playerId,
-        status: 'COMPLETED',
-      },
-    });
-
-    if (existingPayment) {
-      throw new Error('Player has already paid for this team');
-    }
-
-    // Check if team is already fully paid (someone paid FULL)
-    const fullPayment = await prisma.teamPayment.findFirst({
-      where: {
-        teamId,
-        paymentType: 'FULL',
-        status: 'COMPLETED',
-      },
-    });
-
-    if (fullPayment) {
-      throw new Error('Team has already been paid in full');
-    }
-
     // Calculate amount
     const pricePerTeam = Number(team.competition.pricePerTeam);
-    const amount = paymentType === 'FULL'
-      ? pricePerTeam
-      : this.calculatePlayerShare(pricePerTeam, team.roster.length);
+    const depositAmount = Number(team.competition.deposit);
+    const earlyBirdDiscount = Number(team.competition.earlyBirdDiscount);
+    const earlyBirdDeadline = team.competition.earlyBirdDeadline;
+    const rosterSize = team.roster.length;
+
+    let amount: number;
+
+    if (category === 'DEPOSIT') {
+      amount = paymentType === 'FULL'
+        ? depositAmount
+        : Math.round((depositAmount / rosterSize) * 100) / 100;
+    } else {
+      // TEAM_FEE - calculate effective fee with early bird
+      const depositPaidAt = await this.getDepositPaidDate(teamId);
+      const { effectiveFee } = this.calculateEffectiveFee(
+        pricePerTeam,
+        earlyBirdDiscount,
+        depositPaidAt,
+        earlyBirdDeadline
+      );
+      // Team fee is effective fee minus the deposit already paid
+      const teamFeeBalance = effectiveFee - depositAmount;
+      amount = paymentType === 'FULL'
+        ? teamFeeBalance
+        : Math.round((teamFeeBalance / rosterSize) * 100) / 100;
+    }
 
     // Get player info for Stripe
     const player = await prisma.player.findUnique({
@@ -222,18 +273,21 @@ export const teamPaymentService = {
       });
     }
 
-    // Build price_data - use existing Stripe product if available for better reporting
+    const categoryLabel = category === 'DEPOSIT' ? 'Deposit' : 'Team Fee';
+    const description = paymentType === 'FULL'
+      ? `Full ${categoryLabel.toLowerCase()} for ${team.name}`
+      : `${categoryLabel} share for team ${team.name}`;
+
+    // Build price_data
     const priceData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData = {
       currency: 'usd',
-      unit_amount: Math.round(amount * 100), // Stripe uses cents
+      unit_amount: Math.round(amount * 100),
       ...(team.competition.stripeProductId
         ? { product: team.competition.stripeProductId }
         : {
             product_data: {
-              name: `${team.competition.name} - Team Fee`,
-              description: paymentType === 'FULL'
-                ? `Full team payment for ${team.name}`
-                : `Your share for team ${team.name}`,
+              name: `${team.competition.name} - ${categoryLabel}`,
+              description,
             },
           }),
     };
@@ -251,15 +305,14 @@ export const teamPaymentService = {
       success_url: `${APP_URL}/competitions/${team.competition.id}/teams/${teamId}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_URL}/competitions/${team.competition.id}/teams/${teamId}`,
       payment_intent_data: {
-        description: paymentType === 'FULL'
-          ? `Full team payment for ${team.name}`
-          : `${team.name} - Player share`,
+        description,
       },
       metadata: {
-        type: 'team_payment', // Used by webhook to identify this payment type
+        type: 'team_payment',
         teamId,
         playerId,
         paymentType,
+        category,
         competitionId: team.competition.id,
       },
     });
@@ -271,6 +324,7 @@ export const teamPaymentService = {
         playerId,
         amount,
         paymentType,
+        category,
         stripeSessionId: session.id,
         status: 'PENDING',
       },
@@ -281,6 +335,7 @@ export const teamPaymentService = {
       sessionId: session.id,
       amount,
       paymentType,
+      category,
     };
   },
 
@@ -288,8 +343,8 @@ export const teamPaymentService = {
    * Handle successful payment (called by webhook)
    *
    * 1. Mark TeamPayment as COMPLETED
-   * 2. Check if team is fully paid
-   * 3. If fully paid, update team status to CONFIRMED
+   * 2. Check deposit threshold → set team.depositPaid
+   * 3. Check total paid threshold → set team CONFIRMED + paidInFull
    */
   async handlePaymentComplete(stripeSessionId: string) {
     // Find the pending payment
@@ -299,7 +354,14 @@ export const teamPaymentService = {
         team: {
           include: {
             roster: { select: { playerId: true } },
-            competition: { select: { pricePerTeam: true } },
+            competition: {
+              select: {
+                pricePerTeam: true,
+                deposit: true,
+                earlyBirdDiscount: true,
+                earlyBirdDeadline: true,
+              },
+            },
           },
         },
       },
@@ -328,56 +390,57 @@ export const teamPaymentService = {
       teamId: payment.teamId,
       playerId: payment.playerId,
       paymentType: payment.paymentType,
+      category: payment.category,
       amount: payment.amount,
     });
 
-    // Check if team is now fully paid
-    const isFullyPaid = await this.checkTeamFullyPaid(payment.teamId);
+    const teamId = payment.teamId;
+    const competition = payment.team.competition;
+    const depositAmount = Number(competition.deposit);
+    const pricePerTeam = Number(competition.pricePerTeam);
+    const earlyBirdDiscount = Number(competition.earlyBirdDiscount);
+    const earlyBirdDeadline = competition.earlyBirdDeadline;
 
-    if (isFullyPaid) {
-      // Update team status to CONFIRMED and set paidInFull if applicable
-      await prisma.team.update({
-        where: { id: payment.teamId },
-        data: {
-          status: 'CONFIRMED',
-          paidInFull: payment.paymentType === 'FULL',
-        },
-      });
-
-      console.log('Team confirmed:', payment.teamId);
-    }
-  },
-
-  /**
-   * Check if a team has been fully paid
-   *
-   * Fully paid means either:
-   * - Someone paid FULL, OR
-   * - All roster players have paid their SPLIT share
-   */
-  async checkTeamFullyPaid(teamId: string): Promise<boolean> {
-    const team = await prisma.team.findUnique({
-      where: { id: teamId },
-      include: {
-        roster: { select: { playerId: true } },
-        payments: {
-          where: { status: 'COMPLETED' },
-          select: { playerId: true, paymentType: true },
-        },
-      },
+    // Get all completed payments for this team
+    const completedPayments = await prisma.teamPayment.findMany({
+      where: { teamId, status: 'COMPLETED' },
+      select: { amount: true, category: true, paidAt: true },
     });
 
-    if (!team) return false;
+    // 1. Check deposit threshold
+    const depositPaidTotal = completedPayments
+      .filter((p) => p.category === 'DEPOSIT')
+      .reduce((sum, p) => sum + Number(p.amount), 0);
 
-    // Check for FULL payment
-    const hasFullPayment = team.payments.some((p) => p.paymentType === 'FULL');
-    if (hasFullPayment) return true;
+    if (depositPaidTotal >= depositAmount) {
+      await prisma.team.update({
+        where: { id: teamId },
+        data: { depositPaid: true },
+      });
+      console.log('Team deposit paid:', teamId);
+    }
 
-    // Check if all roster players have paid
-    const paidPlayerIds = new Set(team.payments.map((p) => p.playerId));
-    const allPaid = team.roster.every((r) => paidPlayerIds.has(r.playerId));
+    // 2. Check total payment threshold
+    const depositPaidAt = await this.getDepositPaidDate(teamId);
+    const { effectiveFee } = this.calculateEffectiveFee(
+      pricePerTeam,
+      earlyBirdDiscount,
+      depositPaidAt,
+      earlyBirdDeadline
+    );
 
-    return allPaid;
+    const totalPaid = completedPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+
+    if (totalPaid >= effectiveFee) {
+      await prisma.team.update({
+        where: { id: teamId },
+        data: {
+          status: 'CONFIRMED',
+          paidInFull: true,
+        },
+      });
+      console.log('Team confirmed:', teamId);
+    }
   },
 
   /**

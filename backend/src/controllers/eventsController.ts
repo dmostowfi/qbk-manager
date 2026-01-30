@@ -10,7 +10,7 @@ export const eventsController = {
         startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
         endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
         eventType: req.query.eventType as string,
-        courtId: req.query.courtId ? parseInt(req.query.courtId as string) : undefined,
+        spaceId: req.query.spaceId as string | undefined,
         level: req.query.level as string,
         gender: req.query.gender as string,
         isYouth: req.query.isYouth === 'true' ? true : req.query.isYouth === 'false' ? false : undefined,

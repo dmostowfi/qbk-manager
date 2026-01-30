@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import dayjs from 'dayjs';
 import { useAppAuth } from '../../contexts/AuthContext';
 import { useCompetition } from '../../shared/hooks/useCompetition';
 import { teamsApi, competitionsApi } from '../../shared/api/services';
-import { CompetitionFormData, CompetitionStatus, Team, ScheduleConfig, Match } from '../../shared/types';
+import { CompetitionFormData, CompetitionStatus, Team, Match } from '../../shared/types';
 import TeamList from '../../components/competitions/TeamList';
 import TeamForm from '../../components/competitions/TeamForm';
 import TeamDetailModal from '../../components/competitions/TeamDetailModal';
@@ -59,6 +59,8 @@ export default function CompetitionDetailScreen() {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
+  const [suggestedMaxTeams, setSuggestedMaxTeams] = useState<number | null>(null);
+
   const { competition, teams, matches, standings, loading, error, refetch, refetchTeams } = useCompetition(id);
 
   const canEdit = role === 'admin' || role === 'staff';
@@ -68,12 +70,13 @@ export default function CompetitionDetailScreen() {
   const canRegister = isRegistrationOpen && spotsAvailable > 0;
 
   // Get next valid status transition
+  // During REGISTRATION, "Start Competition" only appears after schedule is generated
   const getNextStatus = (current: CompetitionStatus): { status: CompetitionStatus; label: string } | null => {
     switch (current) {
       case 'DRAFT':
         return { status: 'REGISTRATION', label: 'Open Registration' };
       case 'REGISTRATION':
-        return { status: 'ACTIVE', label: 'Start Competition' };
+        return matches.length > 0 ? { status: 'ACTIVE', label: 'Start Competition' } : null;
       case 'ACTIVE':
         return { status: 'COMPLETED', label: 'Mark Complete' };
       default:
@@ -141,10 +144,10 @@ export default function CompetitionDetailScreen() {
     }
   };
 
-  const handleGenerateSchedule = async (config: ScheduleConfig) => {
+  const handleGenerateSchedule = async () => {
     if (!id) return;
     try {
-      await competitionsApi.generateSchedule(id, config);
+      await competitionsApi.generateSchedule(id);
       await refetch();
     } catch (err: any) {
       Alert.alert('Generation Failed', err.message || 'Could not generate schedule');
@@ -152,10 +155,10 @@ export default function CompetitionDetailScreen() {
     }
   };
 
-  // Can generate schedule if: admin + REGISTRATION status + 2+ teams + no matches yet
+  // Can generate schedule if: admin + REGISTRATION status + 4+ teams + no matches yet
   const canGenerateSchedule = canEdit &&
     competition?.status === 'REGISTRATION' &&
-    teams.length >= 2 &&
+    teams.length >= 4 &&
     matches.length === 0;
 
   // Can record scores if: admin/staff + ACTIVE status
@@ -176,6 +179,21 @@ export default function CompetitionDetailScreen() {
       throw err;
     }
   };
+
+  // Fetch suggested max teams for admins
+  useEffect(() => {
+    if (!canEdit || !competition || !competition.numberOfWeeks) return;
+    const spaceIds = competition.spaces?.map((s: { id: string }) => s.id);
+    competitionsApi.getMaxTeams(
+      competition.startDate,
+      competition.numberOfWeeks,
+      spaceIds
+    ).then((result) => {
+      setSuggestedMaxTeams(result.maxTeams);
+    }).catch(() => {
+      // Silently ignore — this is informational only
+    });
+  }, [canEdit, competition?.id]);
 
   // Refetch on focus
   useFocusEffect(
@@ -247,19 +265,65 @@ export default function CompetitionDetailScreen() {
           <FontAwesome name="users" size={14} color={brand.colors.textLight} />
           <Text style={styles.infoText}>{teamCount}/{competition.maxTeams} teams</Text>
         </View>
+        {competition.numberOfWeeks && (
+          <View style={styles.infoItem}>
+            <FontAwesome name="clock-o" size={14} color={brand.colors.textLight} />
+            <Text style={styles.infoText}>{competition.numberOfWeeks} weeks</Text>
+          </View>
+        )}
         <View style={styles.infoItem}>
           <FontAwesome name="dollar" size={14} color={brand.colors.textLight} />
           <Text style={styles.infoText}>${competition.pricePerTeam}/team</Text>
         </View>
+        {competition.deposit > 0 && (
+          <View style={styles.infoItem}>
+            <FontAwesome name="money" size={14} color={brand.colors.textLight} />
+            <Text style={styles.infoText}>${competition.deposit} deposit</Text>
+          </View>
+        )}
       </View>
 
+      {/* Deadline Info */}
+      {(competition.depositDeadline || competition.earlyBirdDeadline) && (
+        <View style={styles.deadlineBar}>
+          {competition.depositDeadline && (
+            <Text style={styles.deadlineText}>
+              Deposit due: {dayjs(competition.depositDeadline).format('MMM D, YYYY')}
+            </Text>
+          )}
+          {competition.earlyBirdDiscount > 0 && competition.earlyBirdDeadline && (
+            <Text style={styles.deadlineText}>
+              Early bird (-${competition.earlyBirdDiscount}) by: {dayjs(competition.earlyBirdDeadline).format('MMM D, YYYY')}
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Suggested Max Teams (admin info) */}
+      {canEdit && suggestedMaxTeams !== null && (
+        <View style={styles.suggestedMaxBar}>
+          <FontAwesome name="info-circle" size={14} color={brand.colors.primary} />
+          <Text style={styles.suggestedMaxText}>
+            Suggested max: {suggestedMaxTeams} teams (based on court availability)
+          </Text>
+        </View>
+      )}
+
       {/* Admin Action Bar */}
-      {canEdit && nextStatus && (
+      {canEdit && (nextStatus || canGenerateSchedule) && (
         <View style={styles.adminBar}>
-          <TouchableOpacity style={styles.statusButton} onPress={handleStatusChange}>
-            <FontAwesome name="arrow-right" size={14} color="#fff" />
-            <Text style={styles.statusButtonText}>{nextStatus.label}</Text>
-          </TouchableOpacity>
+          {canGenerateSchedule && (
+            <TouchableOpacity style={styles.generateButton} onPress={() => setShowScheduleModal(true)}>
+              <FontAwesome name="magic" size={14} color={brand.colors.primary} />
+              <Text style={styles.generateButtonText}>Generate Schedule</Text>
+            </TouchableOpacity>
+          )}
+          {nextStatus && (
+            <TouchableOpacity style={styles.statusButton} onPress={handleStatusChange}>
+              <FontAwesome name="arrow-right" size={14} color="#fff" />
+              <Text style={styles.statusButtonText}>{nextStatus.label}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -296,8 +360,6 @@ export default function CompetitionDetailScreen() {
         {activeTab === 'schedule' && (
           <ScheduleList
             matches={matches}
-            canGenerateSchedule={canGenerateSchedule}
-            onGenerateSchedule={() => setShowScheduleModal(true)}
             canRecordScore={canRecordScore}
             onRecordScore={handleRecordScore}
           />
@@ -447,6 +509,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: brand.colors.textLight,
   },
+  deadlineBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: brand.colors.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: brand.colors.border,
+  },
+  deadlineText: {
+    fontSize: 12,
+    color: brand.colors.primary,
+    fontWeight: '500',
+  },
+  suggestedMaxBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: brand.colors.border,
+  },
+  suggestedMaxText: {
+    fontSize: 13,
+    color: brand.colors.primary,
+    fontWeight: '500',
+  },
   adminBar: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -455,6 +546,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: brand.colors.border,
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: brand.sidebar.activeBackground,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    gap: 8,
+  },
+  generateButtonText: {
+    color: brand.colors.primary,
+    fontWeight: '600',
+    fontSize: 14,
   },
   statusButton: {
     flexDirection: 'row',

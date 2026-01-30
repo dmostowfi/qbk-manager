@@ -12,12 +12,23 @@ export type MembershipType = 'GOLD' | 'DROP_IN' | 'NONE';
 export type MembershipStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED';
 export type EnrollmentStatus = 'REGISTERED' | 'WAITLISTED' | 'CANCELLED' | 'ATTENDED' | 'NO_SHOW';
 
+// Space types
+export type SpaceType = 'COURT' | 'OPEN_AREA' | 'GAMES';
+export type MatchType = 'REGULAR' | 'EXHIBITION' | 'PLAYOFF';
+
+export interface Space {
+  id: string;
+  name: string;
+  type: SpaceType;
+  facilityId: string;
+}
+
 export interface Event {
   id: string;
   title: string;
   description?: string;
   eventType: EventType;
-  courtId: number;
+  spaceId: string;
   startTime: string;
   endTime: string;
   maxCapacity: number;
@@ -30,6 +41,7 @@ export interface Event {
   status: EventStatus;
   createdAt: string;
   updatedAt: string;
+  space?: Space;
   enrollments?: Enrollment[];
 }
 
@@ -91,7 +103,7 @@ export interface EventFormData {
   title: string;
   description?: string;
   eventType: EventType;
-  courtId: number;
+  spaceId: string;
   startTime: Date;
   endTime: Date;
   maxCapacity: number;
@@ -114,7 +126,7 @@ export interface EventFilters {
   startDate?: string;
   endDate?: string;
   eventType?: EventType;
-  courtId?: number;
+  spaceId?: string;
   level?: SkillLevel;
   gender?: GenderCategory;
   isYouth?: boolean;
@@ -203,6 +215,7 @@ export type CompetitionStatus = 'DRAFT' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED
 export type TeamStatus = 'PENDING' | 'CONFIRMED';
 export type TeamPaymentType = 'FULL' | 'SPLIT';
 export type TeamPaymentStatus = 'PENDING' | 'COMPLETED' | 'REFUNDED';
+export type TeamPaymentCategory = 'DEPOSIT' | 'TEAM_FEE';
 
 export interface Competition {
   id: string;
@@ -211,13 +224,19 @@ export interface Competition {
   format: CompetitionFormat;
   startDate: string;
   endDate?: string;
+  numberOfWeeks?: number;
   pricePerTeam: number;
+  deposit: number;
+  earlyBirdDiscount: number;
+  earlyBirdDeadline: string;
+  depositDeadline: string;
   maxTeams: number;
   status: CompetitionStatus;
   registrationDeadline?: string;
   createdAt: string;
   updatedAt: string;
   teams?: Team[];
+  spaces?: Space[];
   _count?: { teams: number };
 }
 
@@ -227,6 +246,7 @@ export interface Team {
   competitionId: string;
   captainId: string;
   status: TeamStatus;
+  depositPaid: boolean;
   paidInFull: boolean;
   createdAt: string;
   updatedAt: string;
@@ -252,7 +272,8 @@ export interface Match {
   team1Id: string;
   team2Id: string;
   roundNumber: number;
-  isPlayoff: boolean;
+  matchType: MatchType;
+  exhibitionForTeamId?: string;
   team1Score?: number | null;
   team2Score?: number | null;
   createdAt: string;
@@ -267,6 +288,7 @@ export interface TeamPayment {
   playerId: string;
   amount: number;
   paymentType: TeamPaymentType;
+  category: TeamPaymentCategory;
   stripeSessionId?: string;
   status: TeamPaymentStatus;
   paidAt?: string;
@@ -278,21 +300,23 @@ export interface TeamPaymentStatusResponse {
   teamId: string;
   teamStatus: TeamStatus;
   paidInFull: boolean;
-  paidBy?: string;
+  depositPaid: boolean;
+  depositAmount: number;
+  effectiveFee: number;
+  earlyBirdApplied: boolean;
+  balanceRemaining: number;
   totalAmount: number;
-  playerShare?: number;
   amountPaid: number;
   amountOwed: number;
   playerPayments: {
     playerId: string;
     playerName: string;
     email: string;
-    amountOwed: number;
     amountPaid: number;
     paid: boolean;
     paidAt: string | null;
+    categories: TeamPaymentCategory[];
   }[];
-  playersRemaining?: number;
 }
 
 export interface Standing {
@@ -300,7 +324,8 @@ export interface Standing {
   teamName: string;
   wins: number;
   losses: number;
-  points: number;
+  pointsFor: number;
+  pointsAgainst: number;
   gamesPlayed: number;
 }
 
@@ -315,17 +340,16 @@ export interface CompetitionFormData {
   type: CompetitionType;
   format: CompetitionFormat;
   startDate: Date;
-  endDate?: Date;
+  numberOfWeeks?: number;
   pricePerTeam: number;
-  maxTeams: number;
+  deposit: number;
+  earlyBirdDiscount: number;
+  earlyBirdDeadline: Date;
+  depositDeadline: Date;
   registrationDeadline?: Date;
+  spaceIds?: string[];
 }
 
 export interface TeamFormData {
   name: string;
-}
-
-export interface ScheduleConfig {
-  courtIds: number[];
-  numberOfWeeks?: number;  // Required only if competition has no endDate
 }

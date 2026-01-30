@@ -14,7 +14,7 @@ export const eventsService = {
     }
 
     if (filters.eventType) where.eventType = filters.eventType as any;
-    if (filters.courtId) where.courtId = filters.courtId;
+    if (filters.spaceId) where.spaceId = filters.spaceId;
     if (filters.level) where.level = filters.level as any;
     if (filters.gender) where.gender = filters.gender as any;
     if (filters.isYouth !== undefined) where.isYouth = filters.isYouth;

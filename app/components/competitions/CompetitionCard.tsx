@@ -59,11 +59,19 @@ export default function CompetitionCard({
 
       <View style={styles.details}>
         <Text style={styles.format}>
-          {formatLabels[competition.format] || competition.format} · ${competition.pricePerTeam}/team
+          {formatLabels[competition.format] || competition.format}
+          {competition.numberOfWeeks ? ` · ${competition.numberOfWeeks} weeks` : ''}
+          {` · $${competition.pricePerTeam}/team`}
         </Text>
         <Text style={styles.dateTime}>
           Starts {startDate.format('MMM D, YYYY')}
         </Text>
+        {competition.deposit > 0 && (
+          <Text style={styles.depositInfo}>
+            ${competition.deposit} deposit
+            {competition.earlyBirdDiscount > 0 && ` · $${competition.earlyBirdDiscount} early bird discount`}
+          </Text>
+        )}
         {competition.registrationDeadline && isRegistrationOpen && (
           <Text style={styles.deadline}>
             Register by {dayjs(competition.registrationDeadline).format('MMM D')}
@@ -147,6 +155,12 @@ const styles = StyleSheet.create({
   dateTime: {
     fontSize: 14,
     color: brand.colors.textLight,
+    marginBottom: 2,
+  },
+  depositInfo: {
+    fontSize: 13,
+    color: brand.colors.primary,
+    fontWeight: '500',
     marginBottom: 2,
   },
   deadline: {

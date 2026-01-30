@@ -339,7 +339,7 @@ export const teamController = {
   async createCheckout(req: Request, res: Response, next: NextFunction) {
     try {
       const { teamId } = req.params;
-      const { paymentType } = req.body;
+      const { paymentType, category } = req.body;
       const authContext = req.authContext!;
 
       if (authContext.role !== 'player') {
@@ -350,10 +350,15 @@ export const teamController = {
         throw createError('paymentType must be FULL or SPLIT', 400);
       }
 
+      if (!category || !['DEPOSIT', 'TEAM_FEE'].includes(category)) {
+        throw createError('category must be DEPOSIT or TEAM_FEE', 400);
+      }
+
       const result = await teamPaymentService.createCheckoutSession(
         teamId,
         authContext.playerId!,
-        paymentType
+        paymentType,
+        category
       );
 
       res.status(201).json({ success: true, data: result });

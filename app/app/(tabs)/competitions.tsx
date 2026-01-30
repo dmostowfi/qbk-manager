@@ -87,6 +87,11 @@ export default function CompetitionsScreen() {
     setEditingCompetition(null);
   };
 
+  // Filter out DRAFT competitions for non-admin users
+  const visibleCompetitions = canEdit
+    ? competitions
+    : competitions.filter((c) => c.status !== 'DRAFT');
+
   const renderCompetition = ({ item }: { item: Competition }) => (
     <CompetitionCard competition={item} onPress={() => handleCompetitionPress(item)} />
   );
@@ -132,7 +137,7 @@ export default function CompetitionsScreen() {
       {/* Header Actions */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
-          {competitions.length} Competition{competitions.length !== 1 ? 's' : ''}
+          {visibleCompetitions.length} Competition{visibleCompetitions.length !== 1 ? 's' : ''}
         </Text>
 
         {canEdit && (
@@ -144,7 +149,7 @@ export default function CompetitionsScreen() {
       </View>
 
       <FlatList
-        data={competitions}
+        data={visibleCompetitions}
         keyExtractor={(item) => item.id}
         renderItem={renderCompetition}
         contentContainerStyle={styles.list}

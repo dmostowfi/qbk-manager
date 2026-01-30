@@ -18,10 +18,12 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
     );
   }
 
-  // Sort by points (desc), then wins (desc), then losses (asc)
+  // Sort by wins (desc), then point differential (desc), then losses (asc)
   const sorted = [...standings].sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
     if (b.wins !== a.wins) return b.wins - a.wins;
+    const diffA = a.pointsFor - a.pointsAgainst;
+    const diffB = b.pointsFor - b.pointsAgainst;
+    if (diffB !== diffA) return diffB - diffA;
     return a.losses - b.losses;
   });
 
@@ -34,7 +36,7 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
         <Text style={[styles.headerCell, styles.statCell]}>W</Text>
         <Text style={[styles.headerCell, styles.statCell]}>L</Text>
         <Text style={[styles.headerCell, styles.statCell]}>GP</Text>
-        <Text style={[styles.headerCell, styles.ptsCell]}>PTS</Text>
+        <Text style={[styles.headerCell, styles.ptsCell]}>+/-</Text>
       </View>
 
       {/* Rows */}
@@ -52,7 +54,9 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
           <Text style={[styles.cell, styles.statCell]}>{standing.wins}</Text>
           <Text style={[styles.cell, styles.statCell]}>{standing.losses}</Text>
           <Text style={[styles.cell, styles.statCell]}>{standing.gamesPlayed}</Text>
-          <Text style={[styles.cell, styles.ptsCell, styles.ptsValue]}>{standing.points}</Text>
+          <Text style={[styles.cell, styles.ptsCell, styles.ptsValue]}>
+            {standing.pointsFor - standing.pointsAgainst >= 0 ? '+' : ''}{standing.pointsFor - standing.pointsAgainst}
+          </Text>
         </View>
       ))}
     </ScrollView>

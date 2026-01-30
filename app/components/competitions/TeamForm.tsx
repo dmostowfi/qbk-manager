@@ -20,9 +20,9 @@ interface TeamFormProps {
   onSubmit: (teamName: string) => Promise<void>;
 }
 
-const formatLabels: Record<string, { players: number; label: string }> = {
-  INTERMEDIATE_4S: { players: 4, label: '4v4' },
-  RECREATIONAL_6S: { players: 6, label: '6v6' },
+const formatLabels: Record<string, string> = {
+  INTERMEDIATE_4S: '4v4',
+  RECREATIONAL_6S: '6v6',
 };
 
 export default function TeamForm({
@@ -35,7 +35,7 @@ export default function TeamForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const formatInfo = formatLabels[competition.format] || { players: 4, label: 'Team' };
+  const formatLabel = formatLabels[competition.format] || 'Team';
 
   useEffect(() => {
     if (visible) {
@@ -89,10 +89,10 @@ export default function TeamForm({
           <View style={styles.infoBox}>
             <Text style={styles.infoTitle}>{competition.name}</Text>
             <Text style={styles.infoText}>
-              {formatInfo.label} · ${competition.pricePerTeam}/team
+              {formatLabel} · ${competition.pricePerTeam}/team
             </Text>
             <Text style={styles.infoNote}>
-              You will become the team captain. You'll need {formatInfo.players} players total on your roster.
+              You will become the team captain.
             </Text>
           </View>
 

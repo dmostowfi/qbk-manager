@@ -7,8 +7,6 @@ import { brand } from '../../constants/branding';
 interface ScheduleListProps {
   matches: Match[];
   onMatchPress?: (match: Match) => void;
-  canGenerateSchedule?: boolean;
-  onGenerateSchedule?: () => void;
   canRecordScore?: boolean;
   onRecordScore?: (match: Match) => void;
 }
@@ -18,21 +16,13 @@ interface MatchSection {
   data: Match[];
 }
 
-export default function ScheduleList({ matches, onMatchPress, canGenerateSchedule, onGenerateSchedule, canRecordScore, onRecordScore }: ScheduleListProps) {
+export default function ScheduleList({ matches, onMatchPress, canRecordScore, onRecordScore }: ScheduleListProps) {
   if (matches.length === 0) {
     return (
       <View style={styles.empty}>
         <FontAwesome name="calendar" size={40} color={brand.colors.border} />
         <Text style={styles.emptyText}>No schedule generated yet</Text>
-        {canGenerateSchedule && onGenerateSchedule && (
-          <>
-            <Text style={styles.emptySubtext}>Generate a round-robin schedule for all teams</Text>
-            <TouchableOpacity style={styles.generateButton} onPress={onGenerateSchedule}>
-              <FontAwesome name="magic" size={16} color="#fff" />
-              <Text style={styles.generateButtonText}>Generate Schedule</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <Text style={styles.emptySubtext}>Use the "Generate Schedule" button above to create matchups</Text>
       </View>
     );
   }
@@ -94,7 +84,8 @@ function MatchRow({
   const team2Name = match.team2?.name ?? 'TBD';
   const hasScore = match.team1Score !== null && match.team2Score !== null;
   const eventDate = match.event?.startTime ? dayjs(match.event.startTime) : null;
-  const courtId = match.event?.courtId;
+  const spaceName = match.event?.space?.name;
+  const isExhibition = match.matchType === 'EXHIBITION';
 
   const handleScorePress = () => {
     if (onRecordScore) {
@@ -103,12 +94,13 @@ function MatchRow({
   };
 
   return (
-    <View style={styles.matchRow}>
+    <View style={[styles.matchRow, isExhibition && styles.exhibitionRow]}>
       <View style={styles.matchInfo}>
         {eventDate && (
           <Text style={styles.matchDate}>
             {eventDate.format('ddd, MMM D')} · {eventDate.format('h:mm A')}
-            {courtId && ` · Court ${courtId}`}
+            {spaceName && ` · Court ${spaceName}`}
+            {isExhibition && '  ·  Exhibition'}
           </Text>
         )}
         <View style={styles.teamsRow}>
@@ -171,20 +163,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 16,
   },
-  generateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: brand.colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    gap: 8,
-  },
-  generateButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
   sectionHeader: {
     paddingVertical: 8,
     paddingHorizontal: 4,
@@ -206,6 +184,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
+  },
+  exhibitionRow: {
+    opacity: 0.7,
   },
   matchInfo: {
     flex: 1,

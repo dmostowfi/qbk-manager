@@ -49,7 +49,7 @@ export interface EventFilters {
   startDate?: Date;
   endDate?: Date;
   eventType?: string;
-  courtId?: number;
+  spaceId?: string;
   level?: string;
   gender?: string;
   isYouth?: boolean;

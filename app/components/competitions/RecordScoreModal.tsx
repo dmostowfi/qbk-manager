@@ -96,6 +96,7 @@ export default function RecordScoreModal({
             {matchDate && (
               <Text style={styles.matchDate}>
                 Week {match.roundNumber} · {matchDate.format('ddd, MMM D @ h:mm A')}
+                {match.matchType === 'EXHIBITION' ? '  (Exhibition)' : ''}
               </Text>
             )}
           </View>
