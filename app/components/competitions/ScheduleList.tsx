@@ -7,8 +7,6 @@ import { brand } from '../../constants/branding';
 interface ScheduleListProps {
   matches: Match[];
   onMatchPress?: (match: Match) => void;
-  canGenerateSchedule?: boolean;
-  onGenerateSchedule?: () => void;
   canRecordScore?: boolean;
   onRecordScore?: (match: Match) => void;
 }
@@ -18,21 +16,13 @@ interface MatchSection {
   data: Match[];
 }
 
-export default function ScheduleList({ matches, onMatchPress, canGenerateSchedule, onGenerateSchedule, canRecordScore, onRecordScore }: ScheduleListProps) {
+export default function ScheduleList({ matches, onMatchPress, canRecordScore, onRecordScore }: ScheduleListProps) {
   if (matches.length === 0) {
     return (
       <View style={styles.empty}>
         <FontAwesome name="calendar" size={40} color={brand.colors.border} />
         <Text style={styles.emptyText}>No schedule generated yet</Text>
-        {canGenerateSchedule && onGenerateSchedule && (
-          <>
-            <Text style={styles.emptySubtext}>Generate a round-robin schedule for all teams</Text>
-            <TouchableOpacity style={styles.generateButton} onPress={onGenerateSchedule}>
-              <FontAwesome name="magic" size={16} color="#fff" />
-              <Text style={styles.generateButtonText}>Generate Schedule</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <Text style={styles.emptySubtext}>Use the "Generate Schedule" button above to create matchups</Text>
       </View>
     );
   }
@@ -172,20 +162,6 @@ const styles = StyleSheet.create({
     color: brand.colors.textMuted,
     marginTop: 4,
     marginBottom: 16,
-  },
-  generateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: brand.colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    gap: 8,
-  },
-  generateButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
   },
   sectionHeader: {
     paddingVertical: 8,

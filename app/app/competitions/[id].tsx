@@ -70,12 +70,13 @@ export default function CompetitionDetailScreen() {
   const canRegister = isRegistrationOpen && spotsAvailable > 0;
 
   // Get next valid status transition
+  // During REGISTRATION, "Start Competition" only appears after schedule is generated
   const getNextStatus = (current: CompetitionStatus): { status: CompetitionStatus; label: string } | null => {
     switch (current) {
       case 'DRAFT':
         return { status: 'REGISTRATION', label: 'Open Registration' };
       case 'REGISTRATION':
-        return { status: 'ACTIVE', label: 'Start Competition' };
+        return matches.length > 0 ? { status: 'ACTIVE', label: 'Start Competition' } : null;
       case 'ACTIVE':
         return { status: 'COMPLETED', label: 'Mark Complete' };
       default:
@@ -309,12 +310,20 @@ export default function CompetitionDetailScreen() {
       )}
 
       {/* Admin Action Bar */}
-      {canEdit && nextStatus && (
+      {canEdit && (nextStatus || canGenerateSchedule) && (
         <View style={styles.adminBar}>
-          <TouchableOpacity style={styles.statusButton} onPress={handleStatusChange}>
-            <FontAwesome name="arrow-right" size={14} color="#fff" />
-            <Text style={styles.statusButtonText}>{nextStatus.label}</Text>
-          </TouchableOpacity>
+          {canGenerateSchedule && (
+            <TouchableOpacity style={styles.generateButton} onPress={() => setShowScheduleModal(true)}>
+              <FontAwesome name="magic" size={14} color={brand.colors.primary} />
+              <Text style={styles.generateButtonText}>Generate Schedule</Text>
+            </TouchableOpacity>
+          )}
+          {nextStatus && (
+            <TouchableOpacity style={styles.statusButton} onPress={handleStatusChange}>
+              <FontAwesome name="arrow-right" size={14} color="#fff" />
+              <Text style={styles.statusButtonText}>{nextStatus.label}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -351,8 +360,6 @@ export default function CompetitionDetailScreen() {
         {activeTab === 'schedule' && (
           <ScheduleList
             matches={matches}
-            canGenerateSchedule={canGenerateSchedule}
-            onGenerateSchedule={() => setShowScheduleModal(true)}
             canRecordScore={canRecordScore}
             onRecordScore={handleRecordScore}
           />
@@ -539,6 +546,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: brand.colors.border,
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: brand.sidebar.activeBackground,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    gap: 8,
+  },
+  generateButtonText: {
+    color: brand.colors.primary,
+    fontWeight: '600',
+    fontSize: 14,
   },
   statusButton: {
     flexDirection: 'row',
