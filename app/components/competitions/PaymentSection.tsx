@@ -50,7 +50,7 @@ export default function PaymentSection({
     playerPayments,
   } = paymentStatus;
 
-  const formatCurrency = (amount: number) => `$${amount.toFixed(0)}`;
+  const formatCurrency = (amount: number | string) => `$${Number(amount).toFixed(0)}`;
   const earlyBirdDeadline = dayjs(competition.earlyBirdDeadline);
   const depositDeadline = dayjs(competition.depositDeadline);
   const earlyBirdDiscount = competition.earlyBirdDiscount;
