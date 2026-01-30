@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import Stripe from 'stripe';
 import { CompetitionFilters } from '../types/index.js';
+import { calculateMaxTeams } from './scheduleService.js';
 
 const prisma = new PrismaClient();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
@@ -136,7 +137,6 @@ export const competitionService = {
     earlyBirdDiscount: number;
     earlyBirdDeadline: Date;
     depositDeadline: Date;
-    maxTeams?: number;
     registrationDeadline?: Date;
     spaceIds?: string[];
   }) {
@@ -166,6 +166,17 @@ export const competitionService = {
       },
     });
 
+    // Auto-calculate maxTeams from court availability
+    let maxTeams = 8; // fallback default
+    if (data.type === 'LEAGUE' && data.numberOfWeeks) {
+      try {
+        const result = await calculateMaxTeams(data.startDate, data.numberOfWeeks, data.spaceIds);
+        maxTeams = result.maxTeams;
+      } catch {
+        // If calculation fails (e.g., no spaces configured), use default
+      }
+    }
+
     return prisma.competition.create({
       data: {
         name: data.name,
@@ -179,7 +190,7 @@ export const competitionService = {
         earlyBirdDiscount: data.earlyBirdDiscount,
         earlyBirdDeadline: data.earlyBirdDeadline,
         depositDeadline: data.depositDeadline,
-        maxTeams: data.maxTeams ?? 8,
+        maxTeams,
         registrationDeadline: data.registrationDeadline,
         status: 'DRAFT',
         stripeProductId: stripeProduct.id,

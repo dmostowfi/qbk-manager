@@ -17,7 +17,9 @@ import {
   CompetitionFormData,
   CompetitionType,
   CompetitionFormat,
+  Space,
 } from '../../shared/types';
+import { spacesApi } from '../../shared/api/services';
 import { brand } from '../../constants/branding';
 
 interface CompetitionFormProps {
@@ -54,12 +56,13 @@ export default function CompetitionForm({
   const [earlyBirdDiscount, setEarlyBirdDiscount] = useState('0');
   const [earlyBirdDeadline, setEarlyBirdDeadline] = useState<Date>(new Date());
   const [depositDeadline, setDepositDeadline] = useState<Date>(new Date());
-  const [maxTeams, setMaxTeams] = useState('8');
   const [registrationDeadline, setRegistrationDeadline] = useState<Date | undefined>(undefined);
+  const [selectedSpaceIds, setSelectedSpaceIds] = useState<string[]>([]);
 
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [courts, setCourts] = useState<Space[]>([]);
 
   // Date picker visibility
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -68,6 +71,11 @@ export default function CompetitionForm({
   const [showDepositDeadlinePicker, setShowDepositDeadlinePicker] = useState(false);
 
   const isEditing = !!competition;
+
+  // Fetch available courts
+  useEffect(() => {
+    spacesApi.list('COURT').then(setCourts).catch(() => {});
+  }, [visible]);
 
   useEffect(() => {
     if (competition) {
@@ -81,7 +89,7 @@ export default function CompetitionForm({
       setEarlyBirdDiscount(String(competition.earlyBirdDiscount));
       setEarlyBirdDeadline(new Date(competition.earlyBirdDeadline));
       setDepositDeadline(new Date(competition.depositDeadline));
-      setMaxTeams(String(competition.maxTeams));
+      setSelectedSpaceIds(competition.spaces?.map((s: Space) => s.id) || []);
       setRegistrationDeadline(
         competition.registrationDeadline ? new Date(competition.registrationDeadline) : undefined
       );
@@ -100,7 +108,7 @@ export default function CompetitionForm({
       setEarlyBirdDiscount('0');
       setEarlyBirdDeadline(new Date());
       setDepositDeadline(new Date());
-      setMaxTeams('8');
+      setSelectedSpaceIds([]);
       setRegistrationDeadline(undefined);
     }
     setShowStartDatePicker(false);
@@ -160,12 +168,6 @@ export default function CompetitionForm({
       return;
     }
 
-    const teams = parseInt(maxTeams, 10);
-    if (isNaN(teams) || teams < 4) {
-      setError('Must have at least 4 teams');
-      return;
-    }
-
     if (type === 'LEAGUE') {
       const weeks = parseInt(numberOfWeeks, 10);
       if (isNaN(weeks) || weeks <= 0) {
@@ -206,8 +208,8 @@ export default function CompetitionForm({
         earlyBirdDiscount: earlyBirdValue,
         earlyBirdDeadline,
         depositDeadline,
-        maxTeams: teams,
         registrationDeadline,
+        ...(selectedSpaceIds.length > 0 ? { spaceIds: selectedSpaceIds } : {}),
       };
 
       await onSubmit(formData);
@@ -275,26 +277,41 @@ export default function CompetitionForm({
             </Picker>
           </View>
 
-          <View style={styles.row}>
-            <View style={styles.halfField}>
-              <Text style={styles.label}>Price per Team ($)</Text>
-              <TextInput
-                style={styles.input}
-                value={pricePerTeam}
-                onChangeText={setPricePerTeam}
-                keyboardType="number-pad"
-              />
-            </View>
-            <View style={styles.halfField}>
-              <Text style={styles.label}>Max Teams</Text>
-              <TextInput
-                style={styles.input}
-                value={maxTeams}
-                onChangeText={setMaxTeams}
-                keyboardType="number-pad"
-              />
-            </View>
-          </View>
+          {courts.length > 0 && (
+            <>
+              <Text style={styles.label}>Courts (Optional — default: all courts)</Text>
+              <View style={styles.courtSelector}>
+                {courts.map((court) => {
+                  const selected = selectedSpaceIds.includes(court.id);
+                  return (
+                    <TouchableOpacity
+                      key={court.id}
+                      style={[styles.courtChip, selected && styles.courtChipSelected]}
+                      onPress={() => {
+                        setSelectedSpaceIds((prev) =>
+                          selected
+                            ? prev.filter((id) => id !== court.id)
+                            : [...prev, court.id]
+                        );
+                      }}
+                    >
+                      <Text style={[styles.courtChipText, selected && styles.courtChipTextSelected]}>
+                        {court.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          <Text style={styles.label}>Price per Team ($)</Text>
+          <TextInput
+            style={styles.input}
+            value={pricePerTeam}
+            onChangeText={setPricePerTeam}
+            keyboardType="number-pad"
+          />
 
           <Text style={styles.label}>Start Date *</Text>
           {Platform.OS === 'web' ? (
@@ -572,6 +589,32 @@ const styles = StyleSheet.create({
     width: '100%',
     cursor: 'pointer',
   } as any,
+  courtSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  courtChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: brand.colors.surface,
+    borderWidth: 1,
+    borderColor: brand.colors.border,
+  },
+  courtChipSelected: {
+    backgroundColor: brand.colors.primary,
+    borderColor: brand.colors.primary,
+  },
+  courtChipText: {
+    fontSize: 14,
+    color: brand.colors.text,
+    fontWeight: '500',
+  },
+  courtChipTextSelected: {
+    color: '#fff',
+  },
   row: {
     flexDirection: 'row',
     gap: 12,

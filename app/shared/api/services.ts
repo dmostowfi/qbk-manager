@@ -11,6 +11,7 @@ import {
   Competition,
   CompetitionFilters,
   CompetitionFormData,
+  Space,
   Team,
   Match,
   Standing,
@@ -354,6 +355,15 @@ export const teamsApi = {
   createCheckout: async (competitionId: string, teamId: string, paymentType: 'FULL' | 'SPLIT', category: 'DEPOSIT' | 'TEAM_FEE'): Promise<{ url: string; amount: number }> => {
     const response = await api.post<ApiResponse<{ url: string; amount: number }>>(`/competitions/${competitionId}/teams/${teamId}/checkout`, { paymentType, category });
     return response.data.data!;
+  },
+};
+
+// Spaces API
+export const spacesApi = {
+  list: async (type?: string): Promise<Space[]> => {
+    const params = type ? `?type=${type}` : '';
+    const response = await api.get<ApiResponse<Space[]>>(`/spaces${params}`);
+    return response.data.data || [];
   },
 };
 

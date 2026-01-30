@@ -39,6 +39,11 @@ export function getHolidaysForYear(year: number): Date[] {
   // New Year's Day - January 1
   holidays.push(new Date(year, 0, 1));
 
+  // Presidents' Day - Third Monday of February
+  const feb1 = new Date(year, 1, 1);
+  const presidentsDay = new Date(year, 1, 1 + ((8 - feb1.getDay()) % 7) + 14);
+  holidays.push(presidentsDay);
+
   // Memorial Day - Last Monday of May
   const may31 = new Date(year, 4, 31);
   const memorialDay = new Date(year, 4, 31 - ((may31.getDay() + 6) % 7));

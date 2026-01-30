@@ -64,7 +64,7 @@ export const competitionController = {
    */
   async create(req: Request, res: Response, next: NextFunction) {
     try {
-      const { name, type, format, startDate, endDate, numberOfWeeks, pricePerTeam, deposit, earlyBirdDiscount, earlyBirdDeadline, depositDeadline, maxTeams, registrationDeadline, spaceIds } = req.body;
+      const { name, type, format, startDate, endDate, numberOfWeeks, pricePerTeam, deposit, earlyBirdDiscount, earlyBirdDeadline, depositDeadline, registrationDeadline, spaceIds } = req.body;
 
       if (!name || !type || !format || !startDate || pricePerTeam === undefined || deposit === undefined || earlyBirdDiscount === undefined || !earlyBirdDeadline || !depositDeadline) {
         throw createError('Missing required fields: name, type, format, startDate, pricePerTeam, deposit, earlyBirdDiscount, earlyBirdDeadline, depositDeadline', 400);
@@ -82,7 +82,6 @@ export const competitionController = {
         earlyBirdDiscount: parseFloat(earlyBirdDiscount),
         earlyBirdDeadline: new Date(earlyBirdDeadline),
         depositDeadline: new Date(depositDeadline),
-        maxTeams: maxTeams ? parseInt(maxTeams) : undefined,
         registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : undefined,
         spaceIds: spaceIds,
       });

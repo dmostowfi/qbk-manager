@@ -346,7 +346,6 @@ export interface CompetitionFormData {
   earlyBirdDiscount: number;
   earlyBirdDeadline: Date;
   depositDeadline: Date;
-  maxTeams: number;
   registrationDeadline?: Date;
   spaceIds?: string[];
 }

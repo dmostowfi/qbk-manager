@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -58,6 +58,8 @@ export default function CompetitionDetailScreen() {
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+
+  const [suggestedMaxTeams, setSuggestedMaxTeams] = useState<number | null>(null);
 
   const { competition, teams, matches, standings, loading, error, refetch, refetchTeams } = useCompetition(id);
 
@@ -177,6 +179,21 @@ export default function CompetitionDetailScreen() {
     }
   };
 
+  // Fetch suggested max teams for admins
+  useEffect(() => {
+    if (!canEdit || !competition || !competition.numberOfWeeks) return;
+    const spaceIds = competition.spaces?.map((s: { id: string }) => s.id);
+    competitionsApi.getMaxTeams(
+      competition.startDate,
+      competition.numberOfWeeks,
+      spaceIds
+    ).then((result) => {
+      setSuggestedMaxTeams(result.maxTeams);
+    }).catch(() => {
+      // Silently ignore — this is informational only
+    });
+  }, [canEdit, competition?.id]);
+
   // Refetch on focus
   useFocusEffect(
     useCallback(() => {
@@ -278,6 +295,16 @@ export default function CompetitionDetailScreen() {
               Early bird (-${competition.earlyBirdDiscount}) by: {dayjs(competition.earlyBirdDeadline).format('MMM D, YYYY')}
             </Text>
           )}
+        </View>
+      )}
+
+      {/* Suggested Max Teams (admin info) */}
+      {canEdit && suggestedMaxTeams !== null && (
+        <View style={styles.suggestedMaxBar}>
+          <FontAwesome name="info-circle" size={14} color={brand.colors.primary} />
+          <Text style={styles.suggestedMaxText}>
+            Suggested max: {suggestedMaxTeams} teams (based on court availability)
+          </Text>
         </View>
       )}
 
@@ -486,6 +513,21 @@ const styles = StyleSheet.create({
   },
   deadlineText: {
     fontSize: 12,
+    color: brand.colors.primary,
+    fontWeight: '500',
+  },
+  suggestedMaxBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: brand.colors.border,
+  },
+  suggestedMaxText: {
+    fontSize: 13,
     color: brand.colors.primary,
     fontWeight: '500',
   },
