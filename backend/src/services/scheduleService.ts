@@ -424,10 +424,6 @@ function generateRoundRobinPairings(teamIds: string[], numberOfWeeks: number): M
   const roundsPerCycle = n - 1;
   const rounds: Matchup[][] = [];
 
-  // Track double header count for fair exhibition opponent selection
-  const doubleHeaderCount: Record<string, number> = {};
-  teamIds.forEach((id) => (doubleHeaderCount[id] = 0));
-
   for (let week = 0; week < numberOfWeeks; week++) {
     const roundInCycle = week % roundsPerCycle;
     const rotatedTeams = getRotatedTeams(teams, roundInCycle);
@@ -453,13 +449,20 @@ function generateRoundRobinPairings(teamIds: string[], numberOfWeeks: number): M
 
     // Handle exhibition match for bye team
     if (byeTeamId && isOdd) {
-      // Find the best exhibition opponent: team with fewest double headers
-      // (excluding the bye team itself)
-      const regularTeamsThisWeek = matchups.map((m) => [m.team1Id, m.team2Id]).flat();
-      const candidates = regularTeamsThisWeek.slice(); // all teams playing this week
+      // Pick the opponent with the fewest prior exhibition double-headers,
+      // derived directly from the matchups already generated.
+      const regularTeamsThisWeek = matchups.flatMap((m) => [m.team1Id, m.team2Id]);
 
-      // Sort by double header count (ascending) to pick fairest opponent
-      candidates.sort((a, b) => doubleHeaderCount[a] - doubleHeaderCount[b]);
+      const priorExhibitionOpponents = rounds.flat()
+        .filter((m) => m.matchType === 'EXHIBITION')
+        .map((m) => m.team2Id);
+
+      const candidates = [...regularTeamsThisWeek].sort((a, b) => {
+        const countA = priorExhibitionOpponents.filter((id) => id === a).length;
+        const countB = priorExhibitionOpponents.filter((id) => id === b).length;
+        return countA - countB;
+      });
+
       const exhibitionOpponent = candidates[0];
 
       if (exhibitionOpponent) {
@@ -469,9 +472,6 @@ function generateRoundRobinPairings(teamIds: string[], numberOfWeeks: number): M
           matchType: 'EXHIBITION',
           exhibitionForTeamId: byeTeamId,
         });
-
-        // Track double header for the opponent (bye team only plays 1 game)
-        doubleHeaderCount[exhibitionOpponent]++;
       }
     }
 
