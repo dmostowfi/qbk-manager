@@ -499,8 +499,9 @@ function getRotatedTeams(teams: string[], rotations: number): string[] {
 /**
  * Assign time slots and courts based on variable availability.
  *
- * Regular matches assigned first (by slot debt priority).
- * Exhibition matches placed adjacent to the opponent's regular match when possible.
+ * When a regular match involves the exhibition opponent, the exhibition
+ * match is scheduled immediately after in the next time slot (any court),
+ * guaranteeing a true back-to-back double header.
  */
 function assignTimeSlotsAndCourts(
   pairings: Matchup[][],
@@ -519,33 +520,33 @@ function assignTimeSlotsAndCourts(
     const weekNumber = weekIndex + 1;
     const weekAvail = availability[weekIndex];
 
-    // Separate regular and exhibition matches
+    // Find the exhibition match for this week (at most one — the bye team's game)
+    const exhibitionMatch = weekMatchups.find((m) => m.matchType === 'EXHIBITION') || null;
+    const exhibitionOpponentId = exhibitionMatch
+      ? (exhibitionMatch.team1Id === exhibitionMatch.exhibitionForTeamId
+          ? exhibitionMatch.team2Id
+          : exhibitionMatch.team1Id)
+      : null;
+
     const regularMatches = weekMatchups.filter((m) => m.matchType === 'REGULAR');
-    const exhibitionMatches = weekMatchups.filter((m) => m.matchType === 'EXHIBITION');
-
-    // Build ordered available slots for this week (best preference first)
     const orderedSlots = buildOrderedSlots(weekAvail);
-
-    // Track which slots are consumed this week
     const consumed = new Set<string>(); // "spaceId:hour"
+    let exhibitionScheduled = false;
 
-    // Sort regular matches by max slot debt (higher debt gets better slots)
+    // Sort regular matches so teams with worse cumulative slot luck go first
     const sortedRegular = [...regularMatches].sort((a, b) => {
       const maxDebtA = Math.max(slotDebt[a.team1Id], slotDebt[a.team2Id]);
       const maxDebtB = Math.max(slotDebt[b.team1Id], slotDebt[b.team2Id]);
       return maxDebtB - maxDebtA;
     });
 
-    // Assign regular matches
-    const regularAssignments = new Map<string, { spaceId: string; hour: number }>();
-
     for (const match of sortedRegular) {
+      // Assign the best available slot to this regular match
       const slot = findAvailableSlot(orderedSlots, consumed);
       if (!slot) {
         throw new Error(`No available slot for regular match in week ${weekNumber}`);
       }
       consumed.add(`${slot.spaceId}:${slot.hour}`);
-      regularAssignments.set(`${match.team1Id}:${match.team2Id}`, slot);
 
       scheduledMatches.push({
         ...match,
@@ -555,55 +556,42 @@ function assignTimeSlotsAndCourts(
         spaceId: slot.spaceId,
       });
 
-      // Update slot debt
       const debtChange = AVERAGE_SLOT_WEIGHT - SLOT_WEIGHTS[slot.hour];
       slotDebt[match.team1Id] += debtChange;
       slotDebt[match.team2Id] += debtChange;
-    }
 
-    // Assign exhibition matches (try to place adjacent to opponent's regular match)
-    for (const match of exhibitionMatches) {
-      const opponentId =
-        match.exhibitionForTeamId === match.team1Id ? match.team2Id : match.team1Id;
+      // If this regular match involves the exhibition opponent, schedule
+      // the exhibition in the next time slot so it's a true double header
+      if (
+        !exhibitionScheduled &&
+        exhibitionMatch &&
+        (match.team1Id === exhibitionOpponentId || match.team2Id === exhibitionOpponentId)
+      ) {
+        exhibitionScheduled = true;
 
-      // Find opponent's regular match assignment
-      let preferredSlot: { spaceId: string; hour: number } | null = null;
-      for (const [key, assignment] of regularAssignments) {
-        if (key.includes(opponentId)) {
-          // Try same court, next time slot
-          const nextHour = assignment.hour + 1;
-          if (
-            TIME_SLOTS.includes(nextHour) &&
-            !consumed.has(`${assignment.spaceId}:${nextHour}`)
-          ) {
-            // Check it's actually available in the original availability
-            const freeCourts = weekAvail.availableSlots.get(nextHour);
-            if (freeCourts && freeCourts.includes(assignment.spaceId)) {
-              preferredSlot = { spaceId: assignment.spaceId, hour: nextHour };
-            }
-          }
-          break;
+        const nextHour = slot.hour + 1;
+        const nextSlot =
+          (TIME_SLOTS.includes(nextHour) && findAvailableSlotAtHour(orderedSlots, consumed, nextHour))
+          || findAvailableSlot(orderedSlots, consumed);
+
+        if (!nextSlot) {
+          throw new Error(`No available slot for exhibition match in week ${weekNumber}`);
         }
+        consumed.add(`${nextSlot.spaceId}:${nextSlot.hour}`);
+
+        scheduledMatches.push({
+          ...exhibitionMatch,
+          roundNumber: weekNumber,
+          date: new Date(weekAvail.date),
+          startHour: nextSlot.hour,
+          spaceId: nextSlot.spaceId,
+        });
+
+        // Only update debt for the bye team — the opponent didn't choose
+        // this slot, so it shouldn't affect their regular match priority
+        const exDebtChange = AVERAGE_SLOT_WEIGHT - SLOT_WEIGHTS[nextSlot.hour];
+        slotDebt[exhibitionMatch.exhibitionForTeamId!] += exDebtChange;
       }
-
-      const slot = preferredSlot || findAvailableSlot(orderedSlots, consumed);
-      if (!slot) {
-        throw new Error(`No available slot for exhibition match in week ${weekNumber}`);
-      }
-      consumed.add(`${slot.spaceId}:${slot.hour}`);
-
-      scheduledMatches.push({
-        ...match,
-        roundNumber: weekNumber,
-        date: new Date(weekAvail.date),
-        startHour: slot.hour,
-        spaceId: slot.spaceId,
-      });
-
-      // Update slot debt (exhibition still affects fairness)
-      const debtChange = AVERAGE_SLOT_WEIGHT - SLOT_WEIGHTS[slot.hour];
-      slotDebt[match.team1Id] += debtChange;
-      slotDebt[match.team2Id] += debtChange;
     }
   });
 
@@ -639,6 +627,22 @@ function findAvailableSlot(
 ): { spaceId: string; hour: number } | null {
   for (const slot of orderedSlots) {
     if (!consumed.has(`${slot.spaceId}:${slot.hour}`)) {
+      return slot;
+    }
+  }
+  return null;
+}
+
+/**
+ * Find the first available slot at a specific hour (any court).
+ */
+function findAvailableSlotAtHour(
+  orderedSlots: { spaceId: string; hour: number }[],
+  consumed: Set<string>,
+  hour: number
+): { spaceId: string; hour: number } | null {
+  for (const slot of orderedSlots) {
+    if (slot.hour === hour && !consumed.has(`${slot.spaceId}:${slot.hour}`)) {
       return slot;
     }
   }
