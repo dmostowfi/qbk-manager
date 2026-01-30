@@ -215,6 +215,7 @@ export type CompetitionStatus = 'DRAFT' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED
 export type TeamStatus = 'PENDING' | 'CONFIRMED';
 export type TeamPaymentType = 'FULL' | 'SPLIT';
 export type TeamPaymentStatus = 'PENDING' | 'COMPLETED' | 'REFUNDED';
+export type TeamPaymentCategory = 'DEPOSIT' | 'TEAM_FEE';
 
 export interface Competition {
   id: string;
@@ -225,7 +226,10 @@ export interface Competition {
   endDate?: string;
   numberOfWeeks?: number;
   pricePerTeam: number;
-  deposit?: number;
+  deposit: number;
+  earlyBirdDiscount: number;
+  earlyBirdDeadline: string;
+  depositDeadline: string;
   maxTeams: number;
   status: CompetitionStatus;
   registrationDeadline?: string;
@@ -242,6 +246,7 @@ export interface Team {
   competitionId: string;
   captainId: string;
   status: TeamStatus;
+  depositPaid: boolean;
   paidInFull: boolean;
   createdAt: string;
   updatedAt: string;
@@ -283,6 +288,7 @@ export interface TeamPayment {
   playerId: string;
   amount: number;
   paymentType: TeamPaymentType;
+  category: TeamPaymentCategory;
   stripeSessionId?: string;
   status: TeamPaymentStatus;
   paidAt?: string;
@@ -294,21 +300,23 @@ export interface TeamPaymentStatusResponse {
   teamId: string;
   teamStatus: TeamStatus;
   paidInFull: boolean;
-  paidBy?: string;
+  depositPaid: boolean;
+  depositAmount: number;
+  effectiveFee: number;
+  earlyBirdApplied: boolean;
+  balanceRemaining: number;
   totalAmount: number;
-  playerShare?: number;
   amountPaid: number;
   amountOwed: number;
   playerPayments: {
     playerId: string;
     playerName: string;
     email: string;
-    amountOwed: number;
     amountPaid: number;
     paid: boolean;
     paidAt: string | null;
+    categories: TeamPaymentCategory[];
   }[];
-  playersRemaining?: number;
 }
 
 export interface Standing {
@@ -334,7 +342,10 @@ export interface CompetitionFormData {
   startDate: Date;
   numberOfWeeks?: number;
   pricePerTeam: number;
-  deposit?: number;
+  deposit: number;
+  earlyBirdDiscount: number;
+  earlyBirdDeadline: Date;
+  depositDeadline: Date;
   maxTeams: number;
   registrationDeadline?: Date;
   spaceIds?: string[];

@@ -1,15 +1,17 @@
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { TeamPaymentStatusResponse } from '../../shared/types';
+import { TeamPaymentStatusResponse, Competition } from '../../shared/types';
 import { brand } from '../../constants/branding';
+import dayjs from 'dayjs';
 
 interface PaymentSectionProps {
   paymentStatus: TeamPaymentStatusResponse | null;
   loading: boolean;
   isCaptain: boolean;
   currentPlayerId?: string;
-  onPayFull?: () => void;
-  onPayShare?: () => void;
+  competition: Competition;
+  onPayDeposit: (paymentType: 'FULL' | 'SPLIT') => void;
+  onPayTeamFee: (paymentType: 'FULL' | 'SPLIT') => void;
 }
 
 export default function PaymentSection({
@@ -17,8 +19,9 @@ export default function PaymentSection({
   loading,
   isCaptain,
   currentPlayerId,
-  onPayFull,
-  onPayShare,
+  competition,
+  onPayDeposit,
+  onPayTeamFee,
 }: PaymentSectionProps) {
   if (loading) {
     return (
@@ -38,19 +41,19 @@ export default function PaymentSection({
 
   const {
     paidInFull,
-    totalAmount,
-    playerShare,
+    depositPaid,
+    depositAmount,
+    effectiveFee,
+    earlyBirdApplied,
+    balanceRemaining,
     amountPaid,
-    amountOwed,
     playerPayments,
   } = paymentStatus;
 
-  // Find current player's payment status
-  const currentPlayerPayment = currentPlayerId
-    ? playerPayments.find((p) => p.playerId === currentPlayerId)
-    : null;
-
   const formatCurrency = (amount: number) => `$${amount.toFixed(0)}`;
+  const earlyBirdDeadline = dayjs(competition.earlyBirdDeadline);
+  const depositDeadline = dayjs(competition.depositDeadline);
+  const earlyBirdDiscount = competition.earlyBirdDiscount;
 
   return (
     <View style={styles.container}>
@@ -64,26 +67,104 @@ export default function PaymentSection({
         )}
       </View>
 
+      {/* Deposit Section */}
+      <View style={styles.phaseBox}>
+        <View style={styles.phaseHeader}>
+          <Text style={styles.phaseTitle}>Deposit</Text>
+          {depositPaid ? (
+            <View style={styles.phasePaidChip}>
+              <FontAwesome name="check" size={10} color="#fff" />
+              <Text style={styles.phasePaidText}>Paid</Text>
+            </View>
+          ) : (
+            <Text style={styles.phaseAmount}>{formatCurrency(depositAmount)}</Text>
+          )}
+        </View>
+
+        {!depositPaid && (
+          <>
+            <Text style={styles.phaseNote}>
+              Due by {depositDeadline.format('MMM D, YYYY')}
+            </Text>
+            <View style={styles.phaseActions}>
+              {isCaptain && (
+                <TouchableOpacity style={styles.payFullButton} onPress={() => onPayDeposit('FULL')}>
+                  <FontAwesome name="credit-card" size={14} color="#fff" />
+                  <Text style={styles.payFullText}>Pay Full Deposit ({formatCurrency(depositAmount)})</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.payShareButton} onPress={() => onPayDeposit('SPLIT')}>
+                <FontAwesome name="user" size={14} color={brand.colors.primary} />
+                <Text style={styles.payShareText}>Pay My Share</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* Team Fee Section */}
+      <View style={styles.phaseBox}>
+        <View style={styles.phaseHeader}>
+          <Text style={styles.phaseTitle}>Team Fee</Text>
+          {paidInFull ? (
+            <View style={styles.phasePaidChip}>
+              <FontAwesome name="check" size={10} color="#fff" />
+              <Text style={styles.phasePaidText}>Paid</Text>
+            </View>
+          ) : (
+            <Text style={styles.phaseAmount}>{formatCurrency(effectiveFee)}</Text>
+          )}
+        </View>
+
+        {earlyBirdApplied ? (
+          <Text style={styles.earlyBirdApplied}>Early bird discount applied (-{formatCurrency(earlyBirdDiscount)})</Text>
+        ) : !depositPaid && earlyBirdDiscount > 0 ? (
+          <Text style={styles.earlyBirdHint}>
+            Pay deposit by {earlyBirdDeadline.format('MMM D')} to save {formatCurrency(earlyBirdDiscount)}
+          </Text>
+        ) : null}
+
+        {!paidInFull && depositPaid && (
+          <>
+            {balanceRemaining > 0 && (
+              <Text style={styles.phaseNote}>
+                Remaining: {formatCurrency(balanceRemaining)}
+              </Text>
+            )}
+            <View style={styles.phaseActions}>
+              {isCaptain && (
+                <TouchableOpacity style={styles.payFullButton} onPress={() => onPayTeamFee('FULL')}>
+                  <FontAwesome name="credit-card" size={14} color="#fff" />
+                  <Text style={styles.payFullText}>Pay Full Balance ({formatCurrency(balanceRemaining)})</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.payShareButton} onPress={() => onPayTeamFee('SPLIT')}>
+                <FontAwesome name="user" size={14} color={brand.colors.primary} />
+                <Text style={styles.payShareText}>Pay My Share</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {!paidInFull && !depositPaid && (
+          <Text style={styles.lockedNote}>Pay deposit first to unlock team fee payment</Text>
+        )}
+      </View>
+
       {/* Summary */}
       <View style={styles.summary}>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Total Team Fee</Text>
-          <Text style={styles.summaryValue}>{formatCurrency(totalAmount)}</Text>
+          <Text style={styles.summaryLabel}>Total Fee</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(effectiveFee)}</Text>
         </View>
-        {playerShare && (
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Per Player Share</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(playerShare)}</Text>
-          </View>
-        )}
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>Amount Paid</Text>
           <Text style={[styles.summaryValue, styles.paidAmount]}>{formatCurrency(amountPaid)}</Text>
         </View>
-        {amountOwed > 0 && (
+        {balanceRemaining > 0 && (
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Remaining</Text>
-            <Text style={[styles.summaryValue, styles.owedAmount]}>{formatCurrency(amountOwed)}</Text>
+            <Text style={[styles.summaryValue, styles.owedAmount]}>{formatCurrency(balanceRemaining)}</Text>
           </View>
         )}
       </View>
@@ -103,30 +184,10 @@ export default function PaymentSection({
                 <Text style={styles.playerName}>{pp.playerName}</Text>
               </View>
               <Text style={[styles.playerAmount, pp.paid && styles.playerAmountPaid]}>
-                {pp.paid ? 'Paid' : formatCurrency(pp.amountOwed)}
+                {pp.paid ? formatCurrency(pp.amountPaid) : 'Unpaid'}
               </Text>
             </View>
           ))}
-        </View>
-      )}
-
-      {/* Payment Actions */}
-      {!paidInFull && (
-        <View style={styles.actions}>
-          {isCaptain && onPayFull && (
-            <TouchableOpacity style={styles.payFullButton} onPress={onPayFull}>
-              <FontAwesome name="credit-card" size={16} color="#fff" />
-              <Text style={styles.payFullText}>Pay Full Amount ({formatCurrency(amountOwed)})</Text>
-            </TouchableOpacity>
-          )}
-          {currentPlayerPayment && !currentPlayerPayment.paid && onPayShare && (
-            <TouchableOpacity style={styles.payShareButton} onPress={onPayShare}>
-              <FontAwesome name="user" size={16} color={brand.colors.primary} />
-              <Text style={styles.payShareText}>
-                Pay My Share ({formatCurrency(currentPlayerPayment.amountOwed)})
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
       )}
     </View>
@@ -165,6 +226,71 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  // Phase box (deposit / team fee)
+  phaseBox: {
+    backgroundColor: brand.colors.background,
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  phaseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  phaseTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: brand.colors.text,
+  },
+  phaseAmount: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: brand.colors.text,
+  },
+  phasePaidChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: brand.colors.success,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 4,
+  },
+  phasePaidText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  phaseNote: {
+    fontSize: 13,
+    color: brand.colors.textLight,
+    marginBottom: 10,
+  },
+  phaseActions: {
+    gap: 8,
+    marginTop: 4,
+  },
+  earlyBirdHint: {
+    fontSize: 13,
+    color: brand.colors.primary,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  earlyBirdApplied: {
+    fontSize: 13,
+    color: brand.colors.success,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  lockedNote: {
+    fontSize: 13,
+    color: brand.colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  // Summary
   summary: {
     backgroundColor: brand.colors.background,
     padding: 14,
@@ -192,6 +318,7 @@ const styles = StyleSheet.create({
   owedAmount: {
     color: brand.colors.warning,
   },
+  // Player payments
   playersSection: {
     marginBottom: 16,
   },
@@ -228,21 +355,19 @@ const styles = StyleSheet.create({
   playerAmountPaid: {
     color: brand.colors.success,
   },
-  actions: {
-    gap: 10,
-  },
+  // Buttons
   payFullButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: brand.colors.primary,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 10,
     gap: 8,
   },
   payFullText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   payShareButton: {
@@ -252,13 +377,13 @@ const styles = StyleSheet.create({
     backgroundColor: brand.colors.surface,
     borderWidth: 1,
     borderColor: brand.colors.primary,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 10,
     gap: 8,
   },
   payShareText: {
     color: brand.colors.primary,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   errorText: {

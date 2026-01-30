@@ -190,13 +190,6 @@ export const teamService = {
       throw new Error('Cannot modify roster after registration closes');
     }
 
-    // Determine max roster size from format
-    const maxRosterSize = team.competition.format === 'INTERMEDIATE_4S' ? 4 : 6;
-
-    if (team._count.roster >= maxRosterSize) {
-      throw new Error(`Team is full (max ${maxRosterSize} players for ${team.competition.format})`);
-    }
-
     // Verify player exists and has completed profile
     const player = await prisma.player.findUnique({
       where: { id: playerId },
@@ -303,16 +296,6 @@ export const teamService = {
     }
 
     const errors: string[] = [];
-    const requiredSize = team.competition.format === 'INTERMEDIATE_4S' ? 4 : 6;
-
-    // Check roster size
-    if (team.roster.length < requiredSize) {
-      errors.push(`Team needs ${requiredSize} players, currently has ${team.roster.length}`);
-    }
-
-    if (team.roster.length > requiredSize) {
-      errors.push(`Team has too many players (${team.roster.length}), max is ${requiredSize}`);
-    }
 
     // Check captain is on roster
     const captainOnRoster = team.roster.some((r) => r.playerId === team.captainId);

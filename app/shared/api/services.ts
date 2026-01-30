@@ -250,6 +250,8 @@ export const competitionsApi = {
     const payload = {
       ...data,
       startDate: data.startDate.toISOString(),
+      earlyBirdDeadline: data.earlyBirdDeadline.toISOString(),
+      depositDeadline: data.depositDeadline.toISOString(),
       registrationDeadline: data.registrationDeadline?.toISOString(),
     };
     const response = await api.post<ApiResponse<Competition>>('/competitions', payload);
@@ -260,6 +262,8 @@ export const competitionsApi = {
     const payload = {
       ...data,
       ...(data.startDate && { startDate: data.startDate.toISOString() }),
+      ...(data.earlyBirdDeadline && { earlyBirdDeadline: data.earlyBirdDeadline.toISOString() }),
+      ...(data.depositDeadline && { depositDeadline: data.depositDeadline.toISOString() }),
       ...(data.registrationDeadline && { registrationDeadline: data.registrationDeadline.toISOString() }),
     };
     const response = await api.put<ApiResponse<Competition>>(`/competitions/${id}`, payload);
@@ -347,8 +351,8 @@ export const teamsApi = {
     return response.data.data!;
   },
 
-  createCheckout: async (competitionId: string, teamId: string, paymentType: 'FULL' | 'SPLIT'): Promise<{ url: string; amount: number }> => {
-    const response = await api.post<ApiResponse<{ url: string; amount: number }>>(`/competitions/${competitionId}/teams/${teamId}/checkout`, { paymentType });
+  createCheckout: async (competitionId: string, teamId: string, paymentType: 'FULL' | 'SPLIT', category: 'DEPOSIT' | 'TEAM_FEE'): Promise<{ url: string; amount: number }> => {
+    const response = await api.post<ApiResponse<{ url: string; amount: number }>>(`/competitions/${competitionId}/teams/${teamId}/checkout`, { paymentType, category });
     return response.data.data!;
   },
 };

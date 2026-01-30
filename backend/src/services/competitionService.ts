@@ -132,7 +132,10 @@ export const competitionService = {
     endDate?: Date;
     numberOfWeeks?: number;
     pricePerTeam: number;
-    deposit?: number;
+    deposit: number;
+    earlyBirdDiscount: number;
+    earlyBirdDeadline: Date;
+    depositDeadline: Date;
     maxTeams?: number;
     registrationDeadline?: Date;
     spaceIds?: string[];
@@ -148,8 +151,8 @@ export const competitionService = {
       if (!data.numberOfWeeks) {
         throw new Error('Leagues must specify numberOfWeeks');
       }
-      if (data.numberOfWeeks !== 6 && data.numberOfWeeks !== 8) {
-        throw new Error('Leagues must be 6 or 8 weeks');
+      if (data.numberOfWeeks <= 0) {
+        throw new Error('numberOfWeeks must be a positive number');
       }
     }
 
@@ -173,6 +176,9 @@ export const competitionService = {
         numberOfWeeks: data.numberOfWeeks,
         pricePerTeam: data.pricePerTeam,
         deposit: data.deposit,
+        earlyBirdDiscount: data.earlyBirdDiscount,
+        earlyBirdDeadline: data.earlyBirdDeadline,
+        depositDeadline: data.depositDeadline,
         maxTeams: data.maxTeams ?? 8,
         registrationDeadline: data.registrationDeadline,
         status: 'DRAFT',

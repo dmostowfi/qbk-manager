@@ -24,9 +24,6 @@ export const AVERAGE_SLOT_WEIGHT =
 // Minimum teams required to generate a schedule
 export const MIN_TEAMS = 4;
 
-// Valid league durations
-export const VALID_WEEK_COUNTS = [6, 8];
-
 // Time slots sorted by preference (best first) for assignment priority
 export const SLOTS_BY_PREFERENCE = [...TIME_SLOTS].sort(
   (a, b) => SLOT_WEIGHTS[b] - SLOT_WEIGHTS[a]

@@ -234,6 +234,11 @@ enum TeamPaymentStatus {
   REFUNDED
 }
 
+enum TeamPaymentCategory {
+  DEPOSIT
+  TEAM_FEE
+}
+
 // ============== COMPETITION MODELS ==============
 
 model Competition {
@@ -245,7 +250,10 @@ model Competition {
   endDate              DateTime?
   numberOfWeeks        Int?
   pricePerTeam         Decimal           @db.Decimal(10, 2)
-  deposit              Decimal?          @db.Decimal(10, 2)
+  deposit              Decimal           @db.Decimal(10, 2) @default(0)
+  earlyBirdDiscount    Decimal           @db.Decimal(10, 2) @default(0)
+  earlyBirdDeadline    DateTime          @default(now())
+  depositDeadline      DateTime          @default(now())
   maxTeams             Int               @default(8)
   status               CompetitionStatus @default(DRAFT)
   registrationDeadline DateTime?
@@ -265,6 +273,7 @@ model Team {
   competitionId String
   captainId     String
   status        TeamStatus @default(PENDING)
+  depositPaid   Boolean    @default(false)
   paidInFull    Boolean    @default(false) // true = captain paid entire fee
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -334,6 +343,7 @@ model TeamPayment {
   playerId        String
   amount          Decimal           @db.Decimal(10, 2)
   paymentType     TeamPaymentType
+  category        TeamPaymentCategory @default(TEAM_FEE)
   stripeSessionId String?           @unique
   status          TeamPaymentStatus @default(PENDING)
   paidAt          DateTime?

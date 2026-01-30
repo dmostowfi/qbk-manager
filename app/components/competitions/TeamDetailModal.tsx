@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Team, Competition, CompetitionFormat, Player, TeamPaymentStatusResponse } from '../../shared/types';
+import { Team, Competition, Player, TeamPaymentStatusResponse } from '../../shared/types';
 import { teamsApi } from '../../shared/api/services';
 import { getRosterEligibilityError } from '../../shared/utils/competitionUtils';
 import PaymentSection from './PaymentSection';
@@ -28,11 +28,6 @@ interface TeamDetailModalProps {
   onClose: () => void;
   onUpdate: () => void;
 }
-
-const formatRequirements: Record<CompetitionFormat, number> = {
-  INTERMEDIATE_4S: 4,
-  RECREATIONAL_6S: 6,
-};
 
 export default function TeamDetailModal({
   visible,
@@ -139,12 +134,11 @@ export default function TeamDetailModal({
     }
   };
 
-  const handlePayFull = async () => {
+  const handlePayDeposit = async (paymentType: 'FULL' | 'SPLIT') => {
     if (!team) return;
     try {
-      const result = await teamsApi.createCheckout(competition.id, team.id, 'FULL');
+      const result = await teamsApi.createCheckout(competition.id, team.id, paymentType, 'DEPOSIT');
       await WebBrowser.openBrowserAsync(result.url);
-      // Refresh payment status after returning from checkout
       fetchPaymentStatus();
       onUpdate();
     } catch (err: any) {
@@ -152,12 +146,11 @@ export default function TeamDetailModal({
     }
   };
 
-  const handlePayShare = async () => {
+  const handlePayTeamFee = async (paymentType: 'FULL' | 'SPLIT') => {
     if (!team) return;
     try {
-      const result = await teamsApi.createCheckout(competition.id, team.id, 'SPLIT');
+      const result = await teamsApi.createCheckout(competition.id, team.id, paymentType, 'TEAM_FEE');
       await WebBrowser.openBrowserAsync(result.url);
-      // Refresh payment status after returning from checkout
       fetchPaymentStatus();
       onUpdate();
     } catch (err: any) {
@@ -255,9 +248,7 @@ export default function TeamDetailModal({
 
   const displayTeam = teamData || team;
   const roster = displayTeam.roster || [];
-  const requiredPlayers = formatRequirements[competition.format] || 4;
   const currentCount = roster.length - pendingRemoveCount + pendingAddCount;
-  const isRosterComplete = currentCount >= requiredPlayers;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
@@ -310,9 +301,8 @@ export default function TeamDetailModal({
               <View style={styles.rosterContainer}>
                 <View style={styles.rosterHeader}>
                   <Text style={styles.rosterTitle}>Roster</Text>
-                  <Text style={[styles.rosterCount, isRosterComplete && styles.rosterCountComplete]}>
-                    {currentCount}/{requiredPlayers} players
-                    {!isRosterComplete && ` (need ${requiredPlayers - currentCount} more)`}
+                  <Text style={styles.rosterCount}>
+                    {currentCount} player{currentCount !== 1 ? 's' : ''}
                   </Text>
                 </View>
 
@@ -410,16 +400,6 @@ export default function TeamDetailModal({
                   </View>
                 )}
 
-                {/* Incomplete Roster Warning */}
-                {!isRosterComplete && !hasUnsavedChanges && (
-                  <View style={styles.warningBox}>
-                    <FontAwesome name="exclamation-triangle" size={14} color={brand.colors.warning} />
-                    <Text style={styles.warningText}>
-                      Team needs {requiredPlayers - currentCount} more player{requiredPlayers - currentCount !== 1 ? 's' : ''} to be complete
-                    </Text>
-                  </View>
-                )}
-
                 {/* Add Player Section - Inline Search */}
                 {canModifyRoster && (
                   <View style={styles.addSection}>
@@ -497,8 +477,9 @@ export default function TeamDetailModal({
                   loading={paymentLoading}
                   isCaptain={!!isCaptain}
                   currentPlayerId={currentPlayerId}
-                  onPayFull={isCaptain ? handlePayFull : undefined}
-                  onPayShare={handlePayShare}
+                  competition={competition}
+                  onPayDeposit={handlePayDeposit}
+                  onPayTeamFee={handlePayTeamFee}
                 />
               )}
             </>
@@ -610,11 +591,8 @@ const styles = StyleSheet.create({
   },
   rosterCount: {
     fontSize: 13,
-    color: brand.colors.warning,
+    color: brand.colors.textLight,
     fontWeight: '500',
-  },
-  rosterCountComplete: {
-    color: brand.colors.success,
   },
   unsavedBanner: {
     backgroundColor: '#FFF8E1',
@@ -729,20 +707,6 @@ const styles = StyleSheet.create({
     color: brand.colors.error,
     fontSize: 13,
     fontWeight: '500',
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF8E1',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-    gap: 8,
-  },
-  warningText: {
-    fontSize: 13,
-    color: '#F57C00',
-    flex: 1,
   },
   // Add player section
   addSection: {

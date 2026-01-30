@@ -50,7 +50,10 @@ export default function CompetitionForm({
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [numberOfWeeks, setNumberOfWeeks] = useState<string>('8');
   const [pricePerTeam, setPricePerTeam] = useState('200');
-  const [deposit, setDeposit] = useState('');
+  const [deposit, setDeposit] = useState('50');
+  const [earlyBirdDiscount, setEarlyBirdDiscount] = useState('0');
+  const [earlyBirdDeadline, setEarlyBirdDeadline] = useState<Date>(new Date());
+  const [depositDeadline, setDepositDeadline] = useState<Date>(new Date());
   const [maxTeams, setMaxTeams] = useState('8');
   const [registrationDeadline, setRegistrationDeadline] = useState<Date | undefined>(undefined);
 
@@ -61,6 +64,8 @@ export default function CompetitionForm({
   // Date picker visibility
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
+  const [showEarlyBirdDeadlinePicker, setShowEarlyBirdDeadlinePicker] = useState(false);
+  const [showDepositDeadlinePicker, setShowDepositDeadlinePicker] = useState(false);
 
   const isEditing = !!competition;
 
@@ -72,7 +77,10 @@ export default function CompetitionForm({
       setStartDate(new Date(competition.startDate));
       setNumberOfWeeks(competition.numberOfWeeks ? String(competition.numberOfWeeks) : '8');
       setPricePerTeam(String(competition.pricePerTeam));
-      setDeposit(competition.deposit ? String(competition.deposit) : '');
+      setDeposit(String(competition.deposit));
+      setEarlyBirdDiscount(String(competition.earlyBirdDiscount));
+      setEarlyBirdDeadline(new Date(competition.earlyBirdDeadline));
+      setDepositDeadline(new Date(competition.depositDeadline));
       setMaxTeams(String(competition.maxTeams));
       setRegistrationDeadline(
         competition.registrationDeadline ? new Date(competition.registrationDeadline) : undefined
@@ -88,12 +96,17 @@ export default function CompetitionForm({
       setStartDate(nextWeek);
       setNumberOfWeeks('8');
       setPricePerTeam('200');
-      setDeposit('');
+      setDeposit('50');
+      setEarlyBirdDiscount('0');
+      setEarlyBirdDeadline(new Date());
+      setDepositDeadline(new Date());
       setMaxTeams('8');
       setRegistrationDeadline(undefined);
     }
     setShowStartDatePicker(false);
     setShowDeadlinePicker(false);
+    setShowEarlyBirdDeadlinePicker(false);
+    setShowDepositDeadlinePicker(false);
     setError('');
   }, [competition, visible]);
 
@@ -109,6 +122,20 @@ export default function CompetitionForm({
     setShowDeadlinePicker(Platform.OS === 'ios');
     if (selectedDate) {
       setRegistrationDeadline(selectedDate);
+    }
+  };
+
+  const handleEarlyBirdDeadlineChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    setShowEarlyBirdDeadlinePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setEarlyBirdDeadline(selectedDate);
+    }
+  };
+
+  const handleDepositDeadlineChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    setShowDepositDeadlinePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDepositDeadline(selectedDate);
     }
   };
 
@@ -141,15 +168,21 @@ export default function CompetitionForm({
 
     if (type === 'LEAGUE') {
       const weeks = parseInt(numberOfWeeks, 10);
-      if (isNaN(weeks) || (weeks !== 6 && weeks !== 8)) {
-        setError('Leagues must be 6 or 8 weeks');
+      if (isNaN(weeks) || weeks <= 0) {
+        setError('Number of weeks must be a positive number');
         return;
       }
     }
 
-    const depositValue = deposit ? parseInt(deposit, 10) : undefined;
-    if (depositValue !== undefined && (isNaN(depositValue) || depositValue < 0)) {
-      setError('Deposit must be a positive number');
+    const depositValue = parseInt(deposit, 10);
+    if (isNaN(depositValue) || depositValue < 0) {
+      setError('Deposit must be 0 or a positive number');
+      return;
+    }
+
+    const earlyBirdValue = parseInt(earlyBirdDiscount, 10);
+    if (isNaN(earlyBirdValue) || earlyBirdValue < 0) {
+      setError('Early bird discount must be 0 or a positive number');
       return;
     }
 
@@ -169,7 +202,10 @@ export default function CompetitionForm({
         startDate,
         ...(type === 'LEAGUE' ? { numberOfWeeks: parseInt(numberOfWeeks, 10) } : {}),
         pricePerTeam: price,
-        ...(depositValue !== undefined ? { deposit: depositValue } : {}),
+        deposit: depositValue,
+        earlyBirdDiscount: earlyBirdValue,
+        earlyBirdDeadline,
+        depositDeadline,
         maxTeams: teams,
         registrationDeadline,
       };
@@ -297,32 +333,106 @@ export default function CompetitionForm({
           {type === 'LEAGUE' && (
             <>
               <Text style={styles.label}>Number of Weeks</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={numberOfWeeks}
-                  onValueChange={(value) => setNumberOfWeeks(value)}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="6 weeks" value="6" />
-                  <Picker.Item label="8 weeks" value="8" />
-                </Picker>
-              </View>
+              <TextInput
+                style={styles.input}
+                value={numberOfWeeks}
+                onChangeText={setNumberOfWeeks}
+                keyboardType="number-pad"
+                placeholder="e.g., 8"
+              />
             </>
           )}
 
           <View style={styles.row}>
             <View style={styles.halfField}>
-              <Text style={styles.label}>Deposit ($)</Text>
+              <Text style={styles.label}>Deposit ($) *</Text>
               <TextInput
                 style={styles.input}
                 value={deposit}
                 onChangeText={setDeposit}
                 keyboardType="number-pad"
-                placeholder="Optional"
+                placeholder="e.g., 50"
               />
             </View>
-            <View style={styles.halfField} />
+            <View style={styles.halfField}>
+              <Text style={styles.label}>Early Bird Discount ($)</Text>
+              <TextInput
+                style={styles.input}
+                value={earlyBirdDiscount}
+                onChangeText={setEarlyBirdDiscount}
+                keyboardType="number-pad"
+                placeholder="e.g., 25"
+              />
+            </View>
           </View>
+
+          <Text style={styles.label}>Deposit Deadline *</Text>
+          {Platform.OS === 'web' ? (
+            <input
+              type="date"
+              value={depositDeadline.toISOString().split('T')[0]}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const [year, month, day] = e.target.value.split('-').map(Number);
+                  const newDate = new Date();
+                  newDate.setFullYear(year, month - 1, day);
+                  setDepositDeadline(newDate);
+                }
+              }}
+              style={webInputStyle}
+            />
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowDepositDeadlinePicker(true)}
+              >
+                <Text style={styles.dateTimeText}>{formatDate(depositDeadline)}</Text>
+              </TouchableOpacity>
+              {showDepositDeadlinePicker && (
+                <DateTimePicker
+                  value={depositDeadline}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDepositDeadlineChange}
+                />
+              )}
+            </>
+          )}
+
+          <Text style={styles.label}>Early Bird Deadline *</Text>
+          {Platform.OS === 'web' ? (
+            <input
+              type="date"
+              value={earlyBirdDeadline.toISOString().split('T')[0]}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const [year, month, day] = e.target.value.split('-').map(Number);
+                  const newDate = new Date();
+                  newDate.setFullYear(year, month - 1, day);
+                  setEarlyBirdDeadline(newDate);
+                }
+              }}
+              style={webInputStyle}
+            />
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowEarlyBirdDeadlinePicker(true)}
+              >
+                <Text style={styles.dateTimeText}>{formatDate(earlyBirdDeadline)}</Text>
+              </TouchableOpacity>
+              {showEarlyBirdDeadlinePicker && (
+                <DateTimePicker
+                  value={earlyBirdDeadline}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleEarlyBirdDeadlineChange}
+                />
+              )}
+            </>
+          )}
 
           <Text style={styles.label}>Registration Deadline (Optional)</Text>
           {Platform.OS === 'web' ? (

@@ -226,7 +226,7 @@ export const scheduleService = {
     const competition = await prisma.competition.findUnique({
       where: { id: competitionId },
       include: {
-        teams: { select: { id: true, name: true, status: true } },
+        teams: { select: { id: true, name: true, status: true, depositPaid: true } },
         spaces: { select: { id: true } },
       },
     });
@@ -239,28 +239,11 @@ export const scheduleService = {
       throw new Error('Competition must be in REGISTRATION status to generate schedule');
     }
 
-    if (competition.teams.length < MIN_TEAMS) {
-      throw new Error(`Need at least ${MIN_TEAMS} teams to generate schedule`);
-    }
+    // Filter to deposit-paid teams only
+    const eligibleTeams = competition.teams.filter((t) => t.depositPaid);
 
-    // Validate all teams are paid and have valid rosters
-    const requiredSize = competition.format === 'INTERMEDIATE_4S' ? 4 : 6;
-    const teamDetails = await Promise.all(
-      competition.teams.map(async (team) => {
-        const rosterCount = await prisma.teamRoster.count({
-          where: { teamId: team.id },
-        });
-        return { ...team, rosterCount };
-      })
-    );
-
-    const hasUnpaid = teamDetails.some((t) => t.status !== 'CONFIRMED');
-    const hasIncompleteRoster = teamDetails.some((t) => t.rosterCount < requiredSize);
-
-    if (hasUnpaid || hasIncompleteRoster) {
-      throw new Error(
-        `All teams must have completed payment and a full roster of ${requiredSize} players to generate the schedule`
-      );
+    if (eligibleTeams.length < MIN_TEAMS) {
+      throw new Error(`Need at least ${MIN_TEAMS} deposit-paid teams to generate schedule (currently ${eligibleTeams.length})`);
     }
 
     // 2. Derive schedule parameters
@@ -281,7 +264,7 @@ export const scheduleService = {
     const availability = await getCourtAvailability(weekDates, assignedSpaceIds);
 
     // 5. Generate round-robin pairings (with exhibition for odd teams)
-    const teamIds = competition.teams.map((t) => t.id);
+    const teamIds = eligibleTeams.map((t) => t.id);
     const pairings = generateRoundRobinPairings(teamIds, numberOfWeeks);
 
     // 6. Validate capacity: enough slots for all matches each week
@@ -316,8 +299,8 @@ export const scheduleService = {
       const createdMatches = [];
 
       for (const match of scheduledMatches) {
-        const team1 = competition.teams.find((t) => t.id === match.team1Id);
-        const team2 = competition.teams.find((t) => t.id === match.team2Id);
+        const team1 = eligibleTeams.find((t) => t.id === match.team1Id);
+        const team2 = eligibleTeams.find((t) => t.id === match.team2Id);
 
         const matchDate = new Date(match.date);
         const startTime = new Date(matchDate.setHours(match.startHour, 0, 0, 0));

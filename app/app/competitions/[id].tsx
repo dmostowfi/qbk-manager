@@ -257,7 +257,29 @@ export default function CompetitionDetailScreen() {
           <FontAwesome name="dollar" size={14} color={brand.colors.textLight} />
           <Text style={styles.infoText}>${competition.pricePerTeam}/team</Text>
         </View>
+        {competition.deposit > 0 && (
+          <View style={styles.infoItem}>
+            <FontAwesome name="money" size={14} color={brand.colors.textLight} />
+            <Text style={styles.infoText}>${competition.deposit} deposit</Text>
+          </View>
+        )}
       </View>
+
+      {/* Deadline Info */}
+      {(competition.depositDeadline || competition.earlyBirdDeadline) && (
+        <View style={styles.deadlineBar}>
+          {competition.depositDeadline && (
+            <Text style={styles.deadlineText}>
+              Deposit due: {dayjs(competition.depositDeadline).format('MMM D, YYYY')}
+            </Text>
+          )}
+          {competition.earlyBirdDiscount > 0 && competition.earlyBirdDeadline && (
+            <Text style={styles.deadlineText}>
+              Early bird (-${competition.earlyBirdDiscount}) by: {dayjs(competition.earlyBirdDeadline).format('MMM D, YYYY')}
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* Admin Action Bar */}
       {canEdit && nextStatus && (
@@ -452,6 +474,20 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 13,
     color: brand.colors.textLight,
+  },
+  deadlineBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: brand.colors.surface,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: brand.colors.border,
+  },
+  deadlineText: {
+    fontSize: 12,
+    color: brand.colors.primary,
+    fontWeight: '500',
   },
   adminBar: {
     flexDirection: 'row',
