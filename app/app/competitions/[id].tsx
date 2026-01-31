@@ -304,7 +304,7 @@ export default function CompetitionDetailScreen() {
         <View style={styles.suggestedMaxBar}>
           <FontAwesome name="info-circle" size={14} color={brand.colors.primary} />
           <Text style={styles.suggestedMaxText}>
-            Suggested max: {suggestedMaxTeams} teams (based on court availability)
+            Suggested max: {suggestedMaxTeams} teams · Calculated at creation based on court availability
           </Text>
         </View>
       )}
